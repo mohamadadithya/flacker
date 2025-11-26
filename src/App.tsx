@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ArrowRight from "~icons/mdi/arrow-right";
 
 function App() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -57,6 +58,7 @@ function App() {
                   className="mt-5 btn btn-primary btn-block"
                 >
                   Split Audio into Tracks
+                  <ArrowRight className="size-5" />
                 </button>
               </form>
             </div>
