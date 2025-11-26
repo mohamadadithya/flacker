@@ -1,19 +1,32 @@
-import { useState } from "react";
 import ArrowRight from "~icons/mdi/arrow-right";
+import { Controller, useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  appFormSchema,
+  AUDIO_MIME_TYPES,
+  CUE_MIME_TYPE,
+  type AppFormData,
+} from "./schema/app.schema";
+import { fileSetter } from "./helpers";
 
 function App() {
-  const [audioFile, setAudioFile] = useState<File | null>(null);
-  const [cueFile, setCueFile] = useState<File | null>(null);
+  const {
+    handleSubmit,
+    formState: { errors },
+    control,
+  } = useForm<AppFormData>({
+    resolver: zodResolver(appFormSchema),
+  });
 
-  function fileSetter(
-    event: React.ChangeEvent<HTMLInputElement>,
-    setter: (file: File | null) => void,
-  ) {
-    const file = event.target.files?.[0];
-    setter(file || null);
+  function onSubmit(data: AppFormData) {
+    console.log(data);
   }
 
-  console.log(cueFile, audioFile);
+  const isAudioFileExist = useWatch({
+    control,
+    name: "audioFile",
+    compute: (value) => !!value,
+  });
 
   return (
     <>
@@ -27,34 +40,65 @@ function App() {
               <p>A tool for audio splitting.</p>
             </div>
             <div className="bg-base-300 p-6 md:p-8 rounded-xl shadow mt-6">
-              <form encType="multipart/form-data">
+              <form
+                encType="multipart/form-data"
+                onSubmit={handleSubmit(onSubmit)}
+              >
                 <div className="grid gap-4">
                   <div className="field-group">
                     <label htmlFor="audio">Audio File</label>
-                    <input
-                      type="file"
-                      name="audio"
-                      id="audio"
-                      className="file-input w-full block mt-2.5"
-                      required
-                      onChange={(event) => fileSetter(event, setAudioFile)}
-                    />
+                    <Controller
+                      name="audioFile"
+                      control={control}
+                      render={({ field: { ref, onChange, name, onBlur } }) => {
+                        return (
+                          <input
+                            type="file"
+                            className={`file-input w-full block mt-2.5 ${errors.audioFile ? "file-input-error" : ""}`}
+                            ref={ref}
+                            name={name}
+                            accept={AUDIO_MIME_TYPES.join(", ")}
+                            onChange={(event) => fileSetter(event, onChange)}
+                            onBlur={onBlur}
+                          />
+                        );
+                      }}
+                    ></Controller>
+                    {errors.audioFile && (
+                      <p className="text-error mt-2.5">
+                        {errors.audioFile?.message}
+                      </p>
+                    )}
                   </div>
                   <div className="field-group">
                     <label htmlFor="cue">CUE File</label>
-                    <input
-                      disabled={audioFile === null}
-                      type="file"
-                      name="cue"
-                      id="cue"
-                      className="file-input w-full block mt-2.5"
-                      required
-                      onChange={(event) => fileSetter(event, setCueFile)}
-                    />
+                    <Controller
+                      name="cueFile"
+                      control={control}
+                      render={({ field: { ref, onChange, name, onBlur } }) => {
+                        return (
+                          <input
+                            disabled={!isAudioFileExist}
+                            type="file"
+                            className={`file-input w-full block mt-2.5 ${errors.cueFile ? "not-disabled:file-input-error" : ""}`}
+                            accept={CUE_MIME_TYPE}
+                            ref={ref}
+                            name={name}
+                            onChange={(event) => fileSetter(event, onChange)}
+                            onBlur={onBlur}
+                          />
+                        );
+                      }}
+                    ></Controller>
+                    {errors.cueFile && (
+                      <p className="text-error mt-2.5">
+                        {errors.cueFile?.message}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <button
-                  type="button"
+                  type="submit"
                   className="mt-5 btn btn-primary btn-block"
                 >
                   Split Audio into Tracks
