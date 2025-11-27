@@ -4,7 +4,12 @@ import Container from "./Container";
 import ArrowRight from "~icons/mdi/arrow-right";
 
 export default function TracksTableSection() {
-  const { trackSheet, setTrackSheet, tracksTableRef } = useAppContext();
+  const {
+    trackSheet,
+    setTrackSheet,
+    tracksTableRef,
+    albumInfo: { name: albumName, performer },
+  } = useAppContext();
   const HEADERS = ["No", "Title", "Performer", "Duration"];
 
   return (
@@ -13,34 +18,44 @@ export default function TracksTableSection() {
       ref={tracksTableRef}
     >
       <Container>
-        <div className="overflow-x-auto w-full max-w-4xl mx-auto">
-          <table className="table table-xs sm:table-sm md:table-md table-pin-rows table-pin-cols">
-            <thead>
-              <tr>
-                <th>
-                  <Checkbox />
-                </th>
-                {HEADERS.map((header, index) => (
-                  <th key={index}>{header}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {trackSheet.map(({ no, title, performer, duration }, id) => (
-                <tr key={no}>
+        <div className="w-full max-w-4xl mx-auto">
+          <div className="space-y-1.5 mb-5">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold">
+              {albumName}
+            </h2>
+            <p className="text-sm sm:text-base">
+              by <span className="text-primary">{performer}</span>
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="table table-xs sm:table-sm md:table-md table-pin-rows table-pin-cols">
+              <thead>
+                <tr>
                   <th>
                     <Checkbox />
                   </th>
-                  <td>{id + 1}</td>
-                  <td>{title}</td>
-                  <td>{performer}</td>
-                  <td>{duration}</td>
+                  {HEADERS.map((header, index) => (
+                    <th key={index}>{header}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="divider"></div>
-          <div className="flex items-center justify-between flex-col sm:flex-row gap-4">
+              </thead>
+              <tbody>
+                {trackSheet.map(({ no, title, performer, duration }, id) => (
+                  <tr key={no}>
+                    <th>
+                      <Checkbox />
+                    </th>
+                    <td>{id + 1}</td>
+                    <td>{title}</td>
+                    <td>{performer}</td>
+                    <td>{duration}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="divider my-3"></div>
+          <div className="flex items-center justify-between flex-col-reverse sm:flex-row gap-4">
             <div className="flex-1 text-sm sm:text-base">
               <p>{trackSheet.length} tracks</p>
             </div>

@@ -7,6 +7,8 @@ function fileSetter(
 ) {
   const file = event.target.files?.[0];
   setter(file || null);
+
+  return file;
 }
 
 function cn(...inputs: ClassValue[]) {

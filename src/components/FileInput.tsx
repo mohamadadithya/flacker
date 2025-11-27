@@ -3,14 +3,14 @@ import type { RefCallBack } from "react-hook-form";
 import { cn } from "../helpers";
 
 interface CustomInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  isError: boolean;
+  isError?: boolean;
   ref: RefCallBack;
   mimeTypes?: string[] | string;
   className?: string;
 }
 
 export function FileInput({
-  isError,
+  isError = false,
   ref,
   mimeTypes,
   className = "",

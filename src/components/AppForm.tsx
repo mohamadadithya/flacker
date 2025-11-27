@@ -4,6 +4,7 @@ import { FileInput } from "./FileInput";
 import {
   appFormSchema,
   AUDIO_MIME_TYPES,
+  COVER_MIME_TYPES,
   CUE_MIME_TYPE,
   type AppFormData,
 } from "../schema/app.schema";
@@ -16,21 +17,25 @@ import {
   getAudioDurationFromFile,
 } from "../lib/cue-converter";
 import { useAppContext } from "../contexts/app.context";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import Spinner from "./Spinner";
+import FolderOpen from "~icons/mdi/folder-open";
+import Trash from "~icons/mdi/trash-outline";
 
 export function AppForm() {
   const {
     handleSubmit,
     formState: { errors },
     control,
+    setValue,
   } = useForm<AppFormData>({
     resolver: zodResolver(appFormSchema),
   });
 
   const { isLoaded, ffmpeg } = useFFmpeg();
-  const { setTrackSheet, trackSheet, tracksTableRef } = useAppContext();
+  const { setTrackSheet, trackSheet, tracksTableRef, setAlbumInfo } =
+    useAppContext();
 
   const [isProcessingCue, setIsProcessingCue] = useState(false);
 
@@ -39,14 +44,23 @@ export function AppForm() {
 
     const promise = async () => {
       setIsProcessingCue(true);
+
       const albumDuration = await getAudioDurationFromFile(
         ffmpeg,
         audioFile,
         audioFile.name,
       );
 
-      const { trackSheet } = await convertCueFileToTrackSheet(cueFile, {
-        totalDurationSeconds: albumDuration,
+      const { trackSheet, cueSheet } = await convertCueFileToTrackSheet(
+        cueFile,
+        {
+          totalDurationSeconds: albumDuration,
+        },
+      );
+
+      setAlbumInfo({
+        name: cueSheet.album || "Unknown album",
+        performer: cueSheet.performer || "Unknown performer",
       });
 
       setTrackSheet(trackSheet);
@@ -71,6 +85,34 @@ export function AppForm() {
     compute: (value) => !!value,
   });
 
+  const isCueFileExist = useWatch({
+    control,
+    name: "cueFile",
+    compute: (value) => !!value,
+  });
+
+  const albumCover = useWatch({
+    control,
+    name: "albumCover",
+    compute: (value) => {
+      if (!(value instanceof File)) return null;
+
+      return URL.createObjectURL(value);
+    },
+  });
+
+  useEffect(() => {
+    return () => {
+      if (albumCover) URL.revokeObjectURL(albumCover);
+    };
+  }, [albumCover]);
+
+  const isCoverInputDisabled =
+    !isAudioFileExist || !isCueFileExist || !isLoaded || isProcessingCue;
+
+  const generalDisabledState = !isLoaded || isProcessingCue;
+  const coverFileInputRef = useRef<HTMLInputElement>(null);
+
   return (
     <div className="bg-base-300 p-6 md:p-8 rounded-xl shadow mt-6 relative overflow-hidden">
       {!isLoaded && (
@@ -86,8 +128,9 @@ export function AppForm() {
               render={({ field: { ref, onChange, name, onBlur } }) => {
                 return (
                   <FileInput
-                    disabled={!isLoaded || isProcessingCue}
+                    disabled={generalDisabledState}
                     ref={ref}
+                    id="audio"
                     name={name}
                     isError={!!errors.audioFile}
                     mimeTypes={AUDIO_MIME_TYPES}
@@ -109,8 +152,9 @@ export function AppForm() {
               render={({ field: { ref, onChange, name, onBlur } }) => {
                 return (
                   <FileInput
-                    disabled={!isAudioFileExist || !isLoaded || isProcessingCue}
+                    disabled={!isAudioFileExist || generalDisabledState}
                     ref={ref}
+                    id="cue"
                     name={name}
                     isError={!!errors.cueFile}
                     mimeTypes={CUE_MIME_TYPE}
@@ -124,9 +168,96 @@ export function AppForm() {
               <p className="text-error mt-2.5">{errors.cueFile?.message}</p>
             )}
           </div>
+          {albumCover ? (
+            <div className="pl-2 pr-4 py-2 bg-base-200 rounded-lg shadow flex items-center justify-between gap-4 border">
+              <div className="flex items-center gap-2.5">
+                <img
+                  src={albumCover}
+                  alt="Album Cover"
+                  className="size-14 aspect-square"
+                />
+                <p className="text-sm sm:text-base">Album Cover</p>
+              </div>
+              <button
+                onClick={() => setValue("albumCover", undefined)}
+                type="button"
+                className="btn btn-error btn-sm"
+              >
+                <Trash className="size-5" />
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="field-group">
+              <label htmlFor="cover-src">Album Cover</label>
+              <div className="join w-full mt-2.5">
+                <div
+                  className={
+                    !isCoverInputDisabled ? "tooltip tooltip-bottom" : ""
+                  }
+                  data-tip="Browse"
+                >
+                  <button
+                    onClick={() => coverFileInputRef.current?.showPicker()}
+                    disabled={isCoverInputDisabled}
+                    type="button"
+                    className="btn btn-neutral join-item"
+                    aria-label="Browse"
+                  >
+                    <FolderOpen />
+                  </button>
+                </div>
+                <label htmlFor="cover-src" className="input join-item w-full">
+                  <Controller
+                    name="albumCover"
+                    control={control}
+                    render={({ field }) => {
+                      const { value, onChange, onBlur, ref } = field;
+                      const urlValue = typeof value === "string" ? value : "";
+                      return (
+                        <>
+                          <input
+                            disabled={isCoverInputDisabled}
+                            type="text"
+                            id="cover-src"
+                            name={field.name}
+                            placeholder="or enter image url..."
+                            ref={ref}
+                            value={urlValue}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              onChange(v === "" ? undefined : v);
+                            }}
+                            onBlur={onBlur}
+                          />
+                          <input
+                            ref={coverFileInputRef}
+                            className="hidden"
+                            accept={COVER_MIME_TYPES.join(", ")}
+                            type="file"
+                            id="cover-file"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              onChange(file ?? undefined);
+                            }}
+                            onBlur={onBlur}
+                          />
+                        </>
+                      );
+                    }}
+                  />
+                </label>
+              </div>
+              {errors.albumCover && (
+                <p className="text-error mt-2.5">
+                  {errors.albumCover?.message}
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <button
-          disabled={!isLoaded || isProcessingCue}
+          disabled={generalDisabledState}
           type="submit"
           className="mt-5 btn btn-primary btn-block"
         >
