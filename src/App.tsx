@@ -1,12 +1,14 @@
 import { Toaster } from "sonner";
 import { AppForm } from "./components/AppForm";
+import Footer from "./components/Footer";
+import Container from "./components/Container";
 
 function App() {
   return (
     <>
       <Toaster position="top-right" richColors />
       <section className="grid place-items-center min-h-dvh relative">
-        <div className="container mx-auto px-5">
+        <Container>
           <div className="w-full max-w-md mx-auto">
             <div className="text-center">
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-2">
@@ -16,20 +18,8 @@ function App() {
             </div>
             <AppForm />
           </div>
-        </div>
-        <footer className="absolute bottom-5 left-2/4 -translate-x-2/4">
-          <p className="text-center text-sm text-base-content text-balance">
-            Made with ❤️ by{" "}
-            <a
-              href="https://www.haloadit.com"
-              className="link link-hover text-primary"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Mohamad Adithya
-            </a>
-          </p>
-        </footer>
+        </Container>
+        <Footer />
       </section>
     </>
   );

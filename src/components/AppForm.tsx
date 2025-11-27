@@ -9,9 +9,10 @@ import {
 } from "../schema/app.schema";
 import { fileSetter } from "../helpers";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
 import { useFFmpeg } from "../hooks/ffmpeg.hook";
 import { TextShimmer } from "./TextShimmer";
+import { convertCueFileToTrackSheet } from "../lib/cue-converter";
+import { useAppContext } from "../contexts/app.context";
 
 export function AppForm() {
   const {
@@ -23,10 +24,15 @@ export function AppForm() {
   });
 
   const { isLoaded } = useFFmpeg();
+  const { setTrackSheet, trackSheet } = useAppContext();
+
+  console.log(trackSheet);
 
   async function onSubmit(data: AppFormData) {
-    console.log(data);
-    toast.error("Terjadi kesalahan saat memproses file audio.");
+    const { cueFile } = data;
+    const { trackSheet } = await convertCueFileToTrackSheet(cueFile);
+
+    setTrackSheet(trackSheet);
   }
 
   const isAudioFileExist = useWatch({
