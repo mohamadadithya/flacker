@@ -1,3 +1,6 @@
+import type { FFmpeg } from "@ffmpeg/ffmpeg";
+import { fetchFile } from "@ffmpeg/util";
+
 type CueTrack = {
   track: number;
   title?: string;
@@ -18,6 +21,7 @@ type TrackSheetRow = {
   performer?: string;
   indexRaw: string;
   startSeconds: number;
+  duration: string;
 };
 
 type TrackSplitPlan = {
@@ -112,17 +116,72 @@ function secondsToFfmpegTime(sec: number): string {
   return `${h}:${m}:${s}`;
 }
 
-function buildTrackSheet(sheet: CueSheet): TrackSheetRow[] {
+function formatCueTime(seconds: number) {
+  const totalFrames = Math.round(seconds * 75);
+
+  const minutes = Math.floor(totalFrames / (75 * 60));
+  const secs = Math.floor((totalFrames % (75 * 60)) / 75);
+  const frames = totalFrames % 75;
+
+  return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}:${String(frames).padStart(2, "0")}`;
+}
+
+async function getAudioDurationFromFile(
+  ffmpeg: FFmpeg,
+  file: File,
+  virtualName: string,
+): Promise<number> {
+  await ffmpeg.writeFile(virtualName, await fetchFile(file));
+
+  let duration: number | null = null;
+
+  const handler = (e: { type: string; message: string }) => {
+    const match = e.message.match(/Duration:\s+(\d+):(\d+):(\d+\.\d+)/);
+    if (match) {
+      const h = Number(match[1]);
+      const m = Number(match[2]);
+      const s = Number(match[3]);
+      duration = h * 3600 + m * 60 + s;
+    }
+  };
+
+  ffmpeg.on("log", handler);
+
+  await ffmpeg.exec(["-i", virtualName, "-f", "null", "-"]);
+
+  // (opsional) lepas listener lagi kalau kamu simpan reference ffmpeg.on
+  // ffmpeg.off?.("log", handler);
+
+  if (duration == null) {
+    throw new Error("Tidak bisa membaca durasi audio dari ffmpeg.");
+  }
+
+  return duration;
+}
+
+function buildTrackSheet(
+  sheet: CueSheet,
+  albumTotalSeconds: number,
+): TrackSheetRow[] {
+  const starts = sheet.tracks
+    .filter((t) => t.index)
+    .map((t) => cueIndexToSeconds(t.index!));
+
   return sheet.tracks
     .filter((t) => t.index)
-    .map((t) => {
-      const startSeconds = cueIndexToSeconds(t.index!);
+    .map((t, i) => {
+      const start = starts[i];
+      const end = i < starts.length - 1 ? starts[i + 1] : albumTotalSeconds;
+      const durationSeconds = Math.max(0, end - start);
+
       return {
         no: t.track,
         title: t.title ?? `Track ${t.track}`,
         performer: t.performer ?? sheet.performer,
         indexRaw: t.index!,
-        startSeconds,
+        startSeconds: start,
+        durationSeconds,
+        duration: formatCueTime(durationSeconds),
       };
     });
 }
@@ -166,17 +225,16 @@ async function convertCueFileToTrackSheet(
   const content = await cueFile.text();
 
   const cueSheet = parseCueText(content);
-  const trackSheet = buildTrackSheet(cueSheet);
+  const trackSheet = buildTrackSheet(
+    cueSheet,
+    options?.totalDurationSeconds || 0,
+  );
+
   const splitPlan = buildSplitPlan(cueSheet, options?.totalDurationSeconds);
 
   return { cueSheet, trackSheet, splitPlan };
 }
 
-/**
- * Validasi sederhana:
- * - total durasi CUE vs durasi audio beda lebih dari tolerance (default 2 detik)
- * - setiap track harus punya durasi > minTrackSeconds (default 1 detik)
- */
 function validateCueAgainstDuration(
   splitPlan: TrackSplitPlan[],
   audioDurationSeconds: number,
@@ -234,7 +292,12 @@ function validateCueAgainstDuration(
   return { ok: errors.length === 0, errors };
 }
 
-export { validateCueAgainstDuration, parseCueText, convertCueFileToTrackSheet };
+export {
+  validateCueAgainstDuration,
+  parseCueText,
+  convertCueFileToTrackSheet,
+  getAudioDurationFromFile,
+};
 
 export type {
   CueTrack,

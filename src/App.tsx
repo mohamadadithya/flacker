@@ -2,8 +2,12 @@ import { Toaster } from "sonner";
 import { AppForm } from "./components/AppForm";
 import Footer from "./components/Footer";
 import Container from "./components/Container";
+import { useAppContext } from "./contexts/app.context";
+import TracksTableSection from "./components/TracksTableSection";
 
 function App() {
+  const { trackSheet } = useAppContext();
+
   return (
     <>
       <Toaster position="top-right" richColors />
@@ -21,6 +25,7 @@ function App() {
         </Container>
         <Footer />
       </section>
+      {trackSheet.length > 0 && <TracksTableSection />}
     </>
   );
 }

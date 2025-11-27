@@ -1,12 +1,14 @@
-import { createContext, useContext } from "react";
+import React, { createContext, useContext, type RefObject } from "react";
 import { type TrackSheetRow } from "../lib/cue-converter";
 
 const AppContext = createContext<{
   trackSheet: TrackSheetRow[];
   setTrackSheet: (newTrackSheet: TrackSheetRow[]) => void;
+  tracksTableRef: RefObject<HTMLDivElement | null>;
 }>({
   trackSheet: [],
   setTrackSheet: () => {},
+  tracksTableRef: React.createRef<HTMLDivElement>(),
 });
 
 function useAppContext() {

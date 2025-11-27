@@ -11,8 +11,14 @@ import { fileSetter } from "../helpers";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFFmpeg } from "../hooks/ffmpeg.hook";
 import { TextShimmer } from "./TextShimmer";
-import { convertCueFileToTrackSheet } from "../lib/cue-converter";
+import {
+  convertCueFileToTrackSheet,
+  getAudioDurationFromFile,
+} from "../lib/cue-converter";
 import { useAppContext } from "../contexts/app.context";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import Spinner from "./Spinner";
 
 export function AppForm() {
   const {
@@ -23,17 +29,41 @@ export function AppForm() {
     resolver: zodResolver(appFormSchema),
   });
 
-  const { isLoaded } = useFFmpeg();
-  const { setTrackSheet, trackSheet } = useAppContext();
+  const { isLoaded, ffmpeg } = useFFmpeg();
+  const { setTrackSheet, trackSheet, tracksTableRef } = useAppContext();
 
-  console.log(trackSheet);
+  const [isProcessingCue, setIsProcessingCue] = useState(false);
 
   async function onSubmit(data: AppFormData) {
-    const { cueFile } = data;
-    const { trackSheet } = await convertCueFileToTrackSheet(cueFile);
+    const { cueFile, audioFile } = data;
 
-    setTrackSheet(trackSheet);
+    const promise = async () => {
+      setIsProcessingCue(true);
+      const albumDuration = await getAudioDurationFromFile(
+        ffmpeg,
+        audioFile,
+        audioFile.name,
+      );
+
+      const { trackSheet } = await convertCueFileToTrackSheet(cueFile, {
+        totalDurationSeconds: albumDuration,
+      });
+
+      setTrackSheet(trackSheet);
+      setIsProcessingCue(false);
+    };
+
+    toast.promise(promise, {
+      loading: "Please wait, checking a cue...",
+      error: "Error",
+    });
   }
+
+  useEffect(() => {
+    if (trackSheet.length) {
+      tracksTableRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [trackSheet, tracksTableRef]);
 
   const isAudioFileExist = useWatch({
     control,
@@ -56,7 +86,7 @@ export function AppForm() {
               render={({ field: { ref, onChange, name, onBlur } }) => {
                 return (
                   <FileInput
-                    disabled={!isLoaded}
+                    disabled={!isLoaded || isProcessingCue}
                     ref={ref}
                     name={name}
                     isError={!!errors.audioFile}
@@ -79,7 +109,7 @@ export function AppForm() {
               render={({ field: { ref, onChange, name, onBlur } }) => {
                 return (
                   <FileInput
-                    disabled={!isAudioFileExist || !isLoaded}
+                    disabled={!isAudioFileExist || !isLoaded || isProcessingCue}
                     ref={ref}
                     name={name}
                     isError={!!errors.cueFile}
@@ -95,9 +125,22 @@ export function AppForm() {
             )}
           </div>
         </div>
-        <button type="submit" className="mt-5 btn btn-primary btn-block">
-          Split Audio into Tracks
-          <ArrowRight className="size-5" />
+        <button
+          disabled={!isLoaded || isProcessingCue}
+          type="submit"
+          className="mt-5 btn btn-primary btn-block"
+        >
+          {isProcessingCue ? (
+            <>
+              Processing...
+              <Spinner />
+            </>
+          ) : (
+            <>
+              Split Audio into Tracks
+              <ArrowRight className="size-5" />
+            </>
+          )}
         </button>
       </form>
       {!isLoaded && (
