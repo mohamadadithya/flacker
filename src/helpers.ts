@@ -9,8 +9,17 @@ function fileSetter(
   setter(file || null);
 }
 
-export function cn(...inputs: ClassValue[]) {
+function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export { fileSetter };
+function downloadBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${name.replace(/\.[^.]+$/, "")}-split.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export { fileSetter, cn, downloadBlob };
