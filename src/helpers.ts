@@ -1,9 +1,16 @@
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
 function fileSetter(
   event: React.ChangeEvent<HTMLInputElement>,
   setter: (file: File | null) => void,
 ) {
   const file = event.target.files?.[0];
   setter(file || null);
+}
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
 }
 
 export { fileSetter };
