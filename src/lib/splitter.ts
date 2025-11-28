@@ -8,7 +8,9 @@ import {
 } from "./cue-converter";
 
 export interface SplitResult {
-  zipBlob: Blob;
+  zipBlob?: Blob;
+  file?: Blob;
+  fileName?: string;
   tracks: {
     name: string;
     blob: Blob;
@@ -39,7 +41,8 @@ type SplitStep =
   | "attachCover"
   | "copyNoCover"
   | "readOutput"
-  | "zipGenerate";
+  | "zipGenerate"
+  | "singleTrackReturn";
 
 export type SplitProgress = {
   status: SplitProgressStatus;
@@ -484,6 +487,25 @@ export async function splitAudioToTracks(
     });
   }
 
+  if (outputs.length === 1) {
+    const only = outputs[0];
+
+    emit({
+      status: "done",
+      phase: "done",
+      step: "singleTrackReturn",
+      track: only.plan,
+      done: totalToProcess,
+      etaSeconds: 0,
+    });
+
+    return {
+      file: only.blob,
+      fileName: only.name,
+      tracks: outputs,
+    };
+  }
+
   emit({
     status: "zipping",
     phase: "zipping",
@@ -528,4 +550,5 @@ export const STEP_TEXT: Record<SplitStep, string> = {
   copyNoCover: "Writing final track file…",
   readOutput: "Retrieving processed track…",
   zipGenerate: "Building ZIP package…",
+  singleTrackReturn: "Exporting single track…",
 };

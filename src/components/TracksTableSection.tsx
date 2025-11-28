@@ -11,6 +11,7 @@ import {
   type SplitUIState,
 } from "../lib/splitter";
 import { downloadBlob } from "../helpers";
+import { TextShimmer } from "./TextShimmer";
 
 export default function TracksTableSection() {
   const {
@@ -61,7 +62,7 @@ export default function TracksTableSection() {
     const cueFile = getValues("cueFile");
     const albumCover = getValues("albumCover");
 
-    const { zipBlob } = await splitAudioToTracks(ffmpeg, audioFile, cueFile, {
+    const result = await splitAudioToTracks(ffmpeg, audioFile, cueFile, {
       albumCover,
       selectedTracks,
       silentLog: true,
@@ -89,7 +90,14 @@ export default function TracksTableSection() {
       },
     });
 
-    downloadBlob(zipBlob, audioFile.name);
+    if ("file" in result && result.file && result.fileName) {
+      downloadBlob(result.file, result.fileName);
+    } else if ("zipBlob" in result && result.zipBlob) {
+      downloadBlob(
+        result.zipBlob,
+        `${audioFile.name.replace(/\.[^.]+$/, "")}-split.zip`,
+      );
+    }
   }
 
   useEffect(() => {
@@ -190,9 +198,9 @@ export default function TracksTableSection() {
       </Container>
       <dialog ref={processModalRef} className="modal">
         <div className="modal-box space-y-2 text-sm">
-          <p className="font-semibold text-lg">
+          <TextShimmer className="font-semibold text-lg">
             {PHASE_TEXT[splitState.phase!]}
-          </p>
+          </TextShimmer>
 
           {splitState.phase !== "processing" ? (
             <p>{splitState.step ? STEP_TEXT[splitState.step] : ""}</p>
