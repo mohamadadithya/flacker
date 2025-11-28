@@ -8,7 +8,7 @@ export default function TracksTableSection() {
     trackSheet,
     setTrackSheet,
     tracksTableRef,
-    albumInfo: { name: albumName, performer },
+    albumInfo: { name: albumName, performer, coverSrc },
   } = useAppContext();
   const HEADERS = ["No", "Title", "Performer", "Duration"];
 
@@ -19,13 +19,20 @@ export default function TracksTableSection() {
     >
       <Container>
         <div className="w-full max-w-4xl mx-auto">
-          <div className="space-y-1.5 mb-5">
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold">
-              {albumName}
-            </h2>
-            <p className="text-sm sm:text-base">
-              by <span className="text-primary">{performer}</span>
-            </p>
+          <div className="mb-5 flex items-center gap-3">
+            <img
+              src={coverSrc}
+              alt={albumName}
+              className="size-28 sm:size-32 aspect-square object-cover object-center"
+            />
+            <div className="space-y-1.5">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold">
+                {albumName}
+              </h2>
+              <p className="text-sm sm:text-base">
+                by <span className="text-primary">{performer}</span>
+              </p>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="table table-xs sm:table-sm md:table-md table-pin-rows table-pin-cols">

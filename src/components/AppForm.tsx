@@ -39,8 +39,16 @@ export function AppForm() {
 
   const [isProcessingCue, setIsProcessingCue] = useState(false);
 
+  async function convertFileToBlobUrl(file: File | undefined) {
+    if (!file) return "";
+
+    const blob = await file.arrayBuffer();
+    const blobUrl = URL.createObjectURL(new Blob([blob]));
+    return blobUrl;
+  }
+
   async function onSubmit(data: AppFormData) {
-    const { cueFile, audioFile } = data;
+    const { cueFile, audioFile, albumCover } = data;
 
     const promise = async () => {
       setIsProcessingCue(true);
@@ -58,9 +66,16 @@ export function AppForm() {
         },
       );
 
+      // convert albumCover file to blob url
+      const coverSrc =
+        typeof albumCover === "string"
+          ? albumCover
+          : await convertFileToBlobUrl(albumCover);
+
       setAlbumInfo({
         name: cueSheet.album || "Unknown album",
         performer: cueSheet.performer || "Unknown performer",
+        coverSrc,
       });
 
       setTrackSheet(trackSheet);
@@ -174,7 +189,7 @@ export function AppForm() {
                 <img
                   src={albumCover}
                   alt="Album Cover"
-                  className="size-14 aspect-square"
+                  className="size-14 aspect-square object-cover object-center"
                 />
                 <p className="text-sm sm:text-base">Album Cover</p>
               </div>

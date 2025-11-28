@@ -3,6 +3,7 @@ import { type CueSheet, type TrackSheetRow } from "../lib/cue-converter";
 
 interface AlbumInfo extends Pick<CueSheet, "performer"> {
   name: string;
+  coverSrc: string;
 }
 
 const AppContext = createContext<{
@@ -18,6 +19,7 @@ const AppContext = createContext<{
   albumInfo: {
     name: "",
     performer: "",
+    coverSrc: "",
   },
   setAlbumInfo: () => {},
 });
