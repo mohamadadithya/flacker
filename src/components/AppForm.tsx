@@ -4,7 +4,7 @@ import { FileInput } from "./FileInput";
 import {
   AUDIO_MIME_TYPES,
   COVER_MIME_TYPES,
-  CUE_MIME_TYPE,
+  CUE_MIME_TYPES,
   type AppFormData,
 } from "../schema/app.schema";
 import { fileSetter } from "../helpers";
@@ -174,7 +174,7 @@ export function AppForm() {
                     id="cue"
                     name={name}
                     isError={!!errors.cueFile}
-                    mimeTypes={CUE_MIME_TYPE}
+                    mimeTypes={CUE_MIME_TYPES}
                     onChange={(event) => fileSetter(event, onChange)}
                     onBlur={onBlur}
                   />
