@@ -2,6 +2,9 @@ import type React from "react";
 import { useAppContext } from "../contexts/app.context";
 import Container from "./Container";
 import ArrowRight from "~icons/mdi/arrow-right";
+import { useState } from "react";
+import { splitAudioToTracks } from "../lib/splitter";
+import { downloadBlob } from "../helpers";
 
 export default function TracksTableSection() {
   const {
@@ -9,8 +12,42 @@ export default function TracksTableSection() {
     setTrackSheet,
     tracksTableRef,
     albumInfo: { name: albumName, performer, coverSrc },
+    ffmpegHook,
+    appFormHook,
   } = useAppContext();
+
   const HEADERS = ["No", "Title", "Performer", "Duration"];
+  const [selectedTracks, setSelectedTracks] = useState<number[]>([]);
+
+  function handleSelectTrack(event: React.ChangeEvent<HTMLInputElement>) {
+    const { checked, value } = event.target;
+    const trackNo = parseInt(value);
+
+    if (checked) {
+      setSelectedTracks([...selectedTracks, trackNo]);
+    } else {
+      setSelectedTracks(selectedTracks.filter((no) => no !== trackNo));
+    }
+  }
+
+  const { ffmpeg } = ffmpegHook;
+
+  async function handleDownload() {
+    if (!appFormHook) return;
+
+    const { getValues } = appFormHook;
+
+    const audioFile = getValues("audioFile");
+    const cueFile = getValues("cueFile");
+    const albumCover = getValues("albumCover");
+
+    const { zipBlob } = await splitAudioToTracks(ffmpeg, audioFile, cueFile, {
+      albumCover,
+      selectedTracks,
+    });
+
+    downloadBlob(zipBlob, audioFile.name);
+  }
 
   return (
     <section
@@ -38,26 +75,32 @@ export default function TracksTableSection() {
             <table className="table table-xs sm:table-sm md:table-md table-pin-rows table-pin-cols">
               <thead>
                 <tr>
-                  <th>
-                    <Checkbox />
-                  </th>
+                  <th></th>
                   {HEADERS.map((header, index) => (
                     <th key={index}>{header}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {trackSheet.map(({ no, title, performer, duration }, id) => (
-                  <tr key={no}>
-                    <th>
-                      <Checkbox />
-                    </th>
-                    <td>{id + 1}</td>
-                    <td>{title}</td>
-                    <td>{performer}</td>
-                    <td>{duration}</td>
-                  </tr>
-                ))}
+                {trackSheet.map(({ no, title, performer, duration }, id) => {
+                  const isChecked = selectedTracks.includes(no);
+
+                  return (
+                    <tr key={no}>
+                      <th>
+                        <Checkbox
+                          checked={isChecked}
+                          onChange={handleSelectTrack}
+                          value={no}
+                        />
+                      </th>
+                      <td>{id + 1}</td>
+                      <td>{title}</td>
+                      <td>{performer}</td>
+                      <td>{duration}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -74,8 +117,14 @@ export default function TracksTableSection() {
               >
                 Cancel
               </button>
-              <button type="button" className="btn btn-primary">
-                Download Tracks
+              <button
+                onClick={handleDownload}
+                type="button"
+                className="btn btn-primary"
+              >
+                {selectedTracks.length > 0
+                  ? `Download Selected Tracks`
+                  : "Download All Tracks"}
                 <ArrowRight className="size-5" />
               </button>
             </div>

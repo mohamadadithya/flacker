@@ -149,11 +149,11 @@ async function getAudioDurationFromFile(
 
   await ffmpeg.exec(["-i", virtualName, "-f", "null", "-"]);
 
-  // (opsional) lepas listener lagi kalau kamu simpan reference ffmpeg.on
-  // ffmpeg.off?.("log", handler);
+  // (optional) remove the listener again if you save the ffmpeg.on reference
+  // ffmpeg.off?.(“log”, handler);
 
   if (duration == null) {
-    throw new Error("Tidak bisa membaca durasi audio dari ffmpeg.");
+    throw new Error("Unable to read audio duration from ffmpeg.");
   }
 
   return duration;
@@ -249,7 +249,7 @@ function validateCueAgainstDuration(
   const errors: string[] = [];
 
   if (splitPlan.length === 0) {
-    errors.push("CUE tidak memiliki track yang valid.");
+    errors.push("CUE does not have a valid track.");
     return { ok: false, errors };
   }
 
@@ -257,17 +257,17 @@ function validateCueAgainstDuration(
 
   if (last.endSeconds == null) {
     errors.push(
-      "Track terakhir tidak memiliki end time (mungkin durasi audio tidak diketahui).",
+      "The last track does not have an end time (perhaps the audio duration is unknown).",
     );
   } else {
     const diff = Math.abs(audioDurationSeconds - last.endSeconds);
     if (diff > tolerance) {
       errors.push(
-        `Durasi audio (${audioDurationSeconds.toFixed(
+        `Audio duration (${audioDurationSeconds.toFixed(
           2,
-        )}s) tidak cocok dengan CUE (≈${last.endSeconds.toFixed(
+        )}s) not compatible with CUE (≈${last.endSeconds.toFixed(
           2,
-        )}s). Selisih ${diff.toFixed(2)}s.`,
+        )}s). difference ${diff.toFixed(2)}s.`,
       );
     }
   }
@@ -275,16 +275,16 @@ function validateCueAgainstDuration(
   for (const t of splitPlan) {
     if (t.durationSeconds != null && t.durationSeconds < minTrack) {
       errors.push(
-        `Track ${t.track} memiliki durasi sangat pendek (${t.durationSeconds.toFixed(
+        `Track ${t.track} has a very short duration (${t.durationSeconds.toFixed(
           2,
         )}s).`,
       );
     }
     if (t.startSeconds >= audioDurationSeconds - tolerance) {
       errors.push(
-        `Track ${t.track} mulai di luar/ujung file audio (start ${t.startSeconds.toFixed(
+        `Track ${t.track} starts at the beginning/end of the audio file (start ${t.startSeconds.toFixed(
           2,
-        )}s, durasi audio ${audioDurationSeconds.toFixed(2)}s).`,
+        )}s, audio duration ${audioDurationSeconds.toFixed(2)}s).`,
       );
     }
   }

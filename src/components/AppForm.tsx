@@ -1,16 +1,13 @@
 import ArrowRight from "~icons/mdi/arrow-right";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useWatch } from "react-hook-form";
 import { FileInput } from "./FileInput";
 import {
-  appFormSchema,
   AUDIO_MIME_TYPES,
   COVER_MIME_TYPES,
   CUE_MIME_TYPE,
   type AppFormData,
 } from "../schema/app.schema";
 import { fileSetter } from "../helpers";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useFFmpeg } from "../hooks/ffmpeg.hook";
 import { TextShimmer } from "./TextShimmer";
 import {
   convertCueFileToTrackSheet,
@@ -25,18 +22,22 @@ import Trash from "~icons/mdi/trash-outline";
 
 export function AppForm() {
   const {
+    setTrackSheet,
+    trackSheet,
+    tracksTableRef,
+    setAlbumInfo,
+    ffmpegHook,
+    appFormHook,
+  } = useAppContext();
+
+  const {
     handleSubmit,
     formState: { errors },
     control,
     setValue,
-  } = useForm<AppFormData>({
-    resolver: zodResolver(appFormSchema),
-  });
+  } = appFormHook!;
 
-  const { isLoaded, ffmpeg } = useFFmpeg();
-  const { setTrackSheet, trackSheet, tracksTableRef, setAlbumInfo } =
-    useAppContext();
-
+  const { isLoaded, ffmpeg } = ffmpegHook;
   const [isProcessingCue, setIsProcessingCue] = useState(false);
 
   async function convertFileToBlobUrl(file: File | undefined) {

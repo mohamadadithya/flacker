@@ -1,4 +1,3 @@
-// hooks/useFFmpeg.ts
 import { useEffect, useState } from "react";
 import { getFFmpegInstance, loadFFmpeg } from "../lib/ffmpeg-client";
 

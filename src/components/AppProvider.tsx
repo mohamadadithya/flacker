@@ -3,6 +3,10 @@
 import { useRef, useState } from "react";
 import type { TrackSheetRow } from "../lib/cue-converter";
 import { AppContext, type AlbumInfo } from "../contexts/app.context";
+import { useFFmpeg } from "../hooks/ffmpeg.hook";
+import { useForm } from "react-hook-form";
+import { appFormSchema, type AppFormData } from "../schema/app.schema";
+import { zodResolver } from "@hookform/resolvers/zod/src/zod.js";
 
 export default function AppProvider({
   children,
@@ -14,6 +18,12 @@ export default function AppProvider({
   const [albumInfo, setAlbumInfo] = useState<AlbumInfo>({
     name: "",
     performer: "",
+    coverSrc: "",
+  });
+
+  const ffmpegHook = useFFmpeg();
+  const appFormHook = useForm<AppFormData>({
+    resolver: zodResolver(appFormSchema),
   });
 
   return (
@@ -24,6 +34,8 @@ export default function AppProvider({
         tracksTableRef,
         albumInfo,
         setAlbumInfo,
+        ffmpegHook,
+        appFormHook,
       }}
     >
       {children}
