@@ -68,12 +68,10 @@ export type SplitUIState = {
   etaSeconds?: number | null;
 };
 
-// ---- util: sanitize filename ----
 function sanitizeFileName(str: string): string {
   return str.replace(/[<>:"/\\|?*]+/g, "_").trim();
 }
 
-// ---- util: build metadata args ----
 function buildMetadataArgs(opts: {
   album: string;
   albumArtist: string;
@@ -100,7 +98,6 @@ function buildMetadataArgs(opts: {
   return args;
 }
 
-// ---- 640px downscale ----
 async function downscaleImage(file: File): Promise<File> {
   const bitmap = await createImageBitmap(file);
 
@@ -129,7 +126,6 @@ async function downscaleImage(file: File): Promise<File> {
   return new File([blob], "cover-640.jpg", { type: "image/jpeg" });
 }
 
-// ---- resolve album cover (File | string | URL -> File 640px) ----
 async function resolveAlbumCoverFile(
   albumCover: SplitOptions["albumCover"],
 ): Promise<File | null> {
@@ -152,7 +148,6 @@ async function resolveAlbumCoverFile(
   return downscaleImage(fetched);
 }
 
-// ---- durasi total audio (detik) ----
 async function getAudioDurationSeconds(
   ffmpeg: FFmpeg,
   inputName: string,
@@ -181,7 +176,10 @@ async function getAudioDurationSeconds(
   return duration;
 }
 
-// ---- fungsi utama ----
+function normalizeTrackTitle(raw: string): string {
+  return raw.replace(/\uFFFD/g, "'").normalize("NFC");
+}
+
 export async function splitAudioToTracks(
   ffmpeg: FFmpeg,
   sourceFile: File,
@@ -190,8 +188,7 @@ export async function splitAudioToTracks(
 ): Promise<SplitResult> {
   const { onProgress, silentLog } = options ?? {};
 
-  // helper untuk emit progress di mana-mana
-  let totalToProcess = 0; // akan di-set setelah kita tahu effectivePlan
+  let totalToProcess = 0;
   let timeStart = performance.now();
 
   const emit = (partial: {
@@ -217,7 +214,6 @@ export async function splitAudioToTracks(
     });
   };
 
-  // ---- PHASE: init & prepare input ----
   emit({
     status: "processing",
     phase: "prepareInput",
@@ -228,7 +224,6 @@ export async function splitAudioToTracks(
   const inputName = sanitizeFileName(sourceFile.name || "audio");
   await ffmpeg.writeFile(inputName, await fetchFile(sourceFile));
 
-  // ---- PHASE: prepare cover (opsional) ----
   let coverInputName: string | null = null;
 
   if (options?.albumCover) {
@@ -261,7 +256,6 @@ export async function splitAudioToTracks(
     }
   }
 
-  // ---- PHASE: analyze audio ----
   emit({
     status: "processing",
     phase: "analyzeAudio",
@@ -271,7 +265,6 @@ export async function splitAudioToTracks(
 
   const audioDurationSeconds = await getAudioDurationSeconds(ffmpeg, inputName);
 
-  // ---- PHASE: build plan (parse + validate cue) ----
   emit({
     status: "processing",
     phase: "buildPlan",
@@ -334,13 +327,11 @@ export async function splitAudioToTracks(
   const albumArtist = cueSheet.performer ?? "";
 
   totalToProcess = effectivePlan.length;
-  timeStart = performance.now(); // mulai hitung ETA dari sini
+  timeStart = performance.now();
 
-  // ---- PHASE: processing (per track) ----
   for (const [index, track] of effectivePlan.entries()) {
     const doneBefore = index;
 
-    // hitung ETA sebelum mulai track ini
     let etaBefore = 0;
     if (doneBefore > 0) {
       const elapsed = (performance.now() - timeStart) / 1000;
@@ -349,7 +340,6 @@ export async function splitAudioToTracks(
       etaBefore = Math.max(0, Math.round(avgPerTrack * remaining));
     }
 
-    // emit: track ini sedang diproses
     emit({
       status: "processing",
       phase: "processing",
@@ -359,11 +349,11 @@ export async function splitAudioToTracks(
       etaSeconds: etaBefore,
     });
 
-    const safeTitle = sanitizeFileName(track.title ?? `Track ${track.track}`);
-    const baseOutName = `${String(track.track).padStart(
-      2,
-      "0",
-    )} - ${safeTitle}`;
+    const rawTitle = track.title ?? `Track ${track.track}`;
+    const normalizedTitle = normalizeTrackTitle(rawTitle);
+
+    const safeTitle = sanitizeFileName(normalizedTitle);
+    const baseOutName = `${String(track.track).padStart(2, "0")} - ${safeTitle}`;
     const outName = `${baseOutName}.${outputExt}`;
     const tempName = `${baseOutName}.tmp.${outputExt}`;
 
@@ -374,14 +364,11 @@ export async function splitAudioToTracks(
       album,
       albumArtist,
       trackArtist,
-      title: safeTitle,
+      title: normalizedTitle,
       trackNo: track.track,
       totalTracks: totalTracksInAlbum,
     });
 
-    //
-    // PASS 1: split audio -> tempName (tanpa cover)
-    //
     const splitArgs: string[] = [
       "-i",
       inputName,
@@ -402,9 +389,6 @@ export async function splitAudioToTracks(
     if (!silentLog) console.log("[ffmpeg] split", splitArgs.join(" "));
     await ffmpeg.exec(splitArgs);
 
-    //
-    // PASS 2: kalau ada cover -> tempel cover ke tempName -> outName
-    //
     if (coverInputName) {
       emit({
         status: "processing",
@@ -490,7 +474,6 @@ export async function splitAudioToTracks(
     const etaNow =
       remainingNow > 0 ? Math.max(0, Math.round(avgNow * remainingNow)) : 0;
 
-    // emit: track ini sudah selesai
     emit({
       status: "processing",
       phase: "processing",
@@ -501,7 +484,6 @@ export async function splitAudioToTracks(
     });
   }
 
-  // ---- PHASE: zipping ----
   emit({
     status: "zipping",
     phase: "zipping",
@@ -512,7 +494,6 @@ export async function splitAudioToTracks(
 
   const zipBlob = await zip.generateAsync({ type: "blob" });
 
-  // ---- PHASE: done ----
   emit({
     status: "done",
     phase: "done",

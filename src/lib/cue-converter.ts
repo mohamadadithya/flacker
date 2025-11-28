@@ -83,7 +83,7 @@ function parseCueText(text: string): CueSheet {
 
     if (line.startsWith("INDEX 01") && currentTrack) {
       const match = line.match(/INDEX 01\s+(\S+)/);
-      if (match) currentTrack.index = match[1]; // e.g. "03:06:20"
+      if (match) currentTrack.index = match[1];
       continue;
     }
   }
@@ -111,7 +111,7 @@ function secondsToFfmpegTime(sec: number): string {
 
   const h = hours.toString().padStart(2, "0");
   const m = minutes.toString().padStart(2, "0");
-  const s = seconds.toFixed(3).padStart(6, "0"); // "03.200" dll
+  const s = seconds.toFixed(3).padStart(6, "0");
 
   return `${h}:${m}:${s}`;
 }
@@ -148,9 +148,6 @@ async function getAudioDurationFromFile(
   ffmpeg.on("log", handler);
 
   await ffmpeg.exec(["-i", virtualName, "-f", "null", "-"]);
-
-  // (optional) remove the listener again if you save the ffmpeg.on reference
-  // ffmpeg.off?.(“log”, handler);
 
   if (duration == null) {
     throw new Error("Unable to read audio duration from ffmpeg.");
@@ -222,7 +219,7 @@ async function convertCueFileToTrackSheet(
   cueFile: File,
   options?: { totalDurationSeconds?: number },
 ) {
-  const content = await cueFile.text();
+  const content = await readCueFileSmart(cueFile);
 
   const cueSheet = parseCueText(content);
   const trackSheet = buildTrackSheet(
@@ -292,11 +289,34 @@ function validateCueAgainstDuration(
   return { ok: errors.length === 0, errors };
 }
 
+async function readCueFileSmart(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+
+  const utf8Text = new TextDecoder("utf-8", { fatal: false }).decode(buf);
+
+  const replacementCountUtf8 = (utf8Text.match(/\uFFFD/g) ?? []).length;
+
+  if (replacementCountUtf8 === 0) {
+    return utf8Text.normalize("NFC");
+  }
+
+  const win1252Text = new TextDecoder("windows-1252", {
+    fatal: false,
+  }).decode(buf);
+  const replacementCountWin = (win1252Text.match(/\uFFFD/g) ?? []).length;
+
+  const best =
+    replacementCountWin < replacementCountUtf8 ? win1252Text : utf8Text;
+
+  return best.normalize("NFC");
+}
+
 export {
   validateCueAgainstDuration,
   parseCueText,
   convertCueFileToTrackSheet,
   getAudioDurationFromFile,
+  readCueFileSmart,
 };
 
 export type {
