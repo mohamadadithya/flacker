@@ -28,7 +28,7 @@ export function useFFmpeg() {
     };
   }, []);
 
-  const ffmpeg = getFFmpegInstance();
+  const ffmpeg = getFFmpegInstance(true);
 
   return { ffmpeg, isLoaded, error };
 }

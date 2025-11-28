@@ -2,8 +2,14 @@ import type React from "react";
 import { useAppContext } from "../contexts/app.context";
 import Container from "./Container";
 import ArrowRight from "~icons/mdi/arrow-right";
-import { useState } from "react";
-import { splitAudioToTracks } from "../lib/splitter";
+import { useEffect, useRef, useState } from "react";
+import {
+  PHASE_TEXT,
+  splitAudioToTracks,
+  STEP_TEXT,
+  type SplitProgress,
+  type SplitUIState,
+} from "../lib/splitter";
 import { downloadBlob } from "../helpers";
 
 export default function TracksTableSection() {
@@ -32,6 +38,14 @@ export default function TracksTableSection() {
 
   const { ffmpeg } = ffmpegHook;
 
+  const [splitState, setSplitState] = useState<SplitUIState>({
+    status: "idle",
+    done: 0,
+    total: 0,
+  });
+
+  const processModalRef = useRef<HTMLDialogElement | null>(null);
+
   async function handleDownload() {
     if (!appFormHook) return;
 
@@ -44,10 +58,41 @@ export default function TracksTableSection() {
     const { zipBlob } = await splitAudioToTracks(ffmpeg, audioFile, cueFile, {
       albumCover,
       selectedTracks,
+      silentLog: true,
+      onProgress: (ev: SplitProgress) => {
+        const { status, phase, step, track, done, total, etaSeconds } = ev;
+
+        setSplitState((prev) => ({
+          ...prev,
+          status:
+            status === "processing"
+              ? phase === "zipping"
+                ? "zipping"
+                : "processing"
+              : status,
+          phase,
+          step,
+          currentTrackTitle:
+            phase === "processing" && track
+              ? (track.title ?? `Track ${track.track}`)
+              : prev.currentTrackTitle,
+          done,
+          total,
+          etaSeconds: status === "processing" ? etaSeconds : null,
+        }));
+      },
     });
 
     downloadBlob(zipBlob, audioFile.name);
   }
+
+  useEffect(() => {
+    if (["processing", "zipping"].includes(splitState.status)) {
+      processModalRef.current?.showModal();
+    } else if (splitState.status === "done") {
+      processModalRef.current?.close();
+    }
+  });
 
   return (
     <section
@@ -132,6 +177,39 @@ export default function TracksTableSection() {
           </div>
         </div>
       </Container>
+      <dialog ref={processModalRef} className="modal">
+        <div className="modal-box space-y-2 text-sm">
+          <p className="font-semibold text-lg">
+            {PHASE_TEXT[splitState.phase!]}
+          </p>
+
+          {splitState.phase !== "processing" ? (
+            <p>{splitState.step ? STEP_TEXT[splitState.step] : ""}</p>
+          ) : null}
+
+          {splitState.phase === "processing" &&
+            splitState.currentTrackTitle && (
+              <div className="flex items-center justify-between gap-4">
+                <p>
+                  Splitting Track: <b>{splitState.currentTrackTitle}</b>
+                </p>
+                <p>
+                  {splitState.done}/{splitState.total}
+                </p>
+              </div>
+            )}
+
+          {splitState.phase === "processing" ? (
+            <progress
+              className="progress w-full progress-primary"
+              value={splitState.done}
+              max={splitState.total}
+            ></progress>
+          ) : (
+            <progress className="progress w-full"></progress>
+          )}
+        </div>
+      </dialog>
     </section>
   );
 }

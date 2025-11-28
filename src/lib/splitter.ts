@@ -16,10 +16,89 @@ export interface SplitResult {
   }[];
 }
 
-type SplitOptions = {
+type SplitProgressStatus = "processing" | "zipping" | "done";
+
+type SplitPhase =
+  | "init"
+  | "prepareInput"
+  | "prepareCover"
+  | "analyzeAudio"
+  | "buildPlan"
+  | "processing"
+  | "zipping"
+  | "done";
+
+type SplitStep =
+  | "writeInput"
+  | "resolveCover"
+  | "writeCover"
+  | "probeDuration"
+  | "convertCue"
+  | "validatePlan"
+  | "trackSplit"
+  | "attachCover"
+  | "copyNoCover"
+  | "readOutput"
+  | "zipGenerate";
+
+export type SplitProgress = {
+  status: SplitProgressStatus;
+  phase?: SplitPhase;
+  step?: SplitStep;
+  track?: TrackSplitPlan;
+  done: number;
+  total: number;
+  etaSeconds: number;
+};
+
+export type SplitOptions = {
   albumCover?: File | null | string | URL;
   selectedTracks?: number[];
+  onProgress?: (event: SplitProgress) => void;
+  silentLog?: boolean;
 };
+
+export type SplitUIState = {
+  status: "idle" | "processing" | "zipping" | "done";
+  phase?: SplitPhase;
+  step?: SplitStep;
+  currentTrackTitle?: string;
+  done: number;
+  total: number;
+  etaSeconds?: number | null;
+};
+
+// ---- util: sanitize filename ----
+function sanitizeFileName(str: string): string {
+  return str.replace(/[<>:"/\\|?*]+/g, "_").trim();
+}
+
+// ---- util: build metadata args ----
+function buildMetadataArgs(opts: {
+  album: string;
+  albumArtist: string;
+  trackArtist: string;
+  title: string;
+  trackNo: number;
+  totalTracks: number;
+}): string[] {
+  const args: string[] = [];
+
+  if (opts.album) {
+    args.push("-metadata", `album=${opts.album}`);
+  }
+  if (opts.albumArtist) {
+    args.push("-metadata", `album_artist=${opts.albumArtist}`);
+  }
+  if (opts.trackArtist) {
+    args.push("-metadata", `artist=${opts.trackArtist}`);
+  }
+
+  args.push("-metadata", `title=${opts.title}`);
+  args.push("-metadata", `track=${opts.trackNo}/${opts.totalTracks}`);
+
+  return args;
+}
 
 // ---- 640px downscale ----
 async function downscaleImage(file: File): Promise<File> {
@@ -38,6 +117,7 @@ async function downscaleImage(file: File): Promise<File> {
 
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context not available");
+
   ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
 
   const blob = await new Promise<Blob | null>((resolve) =>
@@ -49,6 +129,7 @@ async function downscaleImage(file: File): Promise<File> {
   return new File([blob], "cover-640.jpg", { type: "image/jpeg" });
 }
 
+// ---- resolve album cover (File | string | URL -> File 640px) ----
 async function resolveAlbumCoverFile(
   albumCover: SplitOptions["albumCover"],
 ): Promise<File | null> {
@@ -59,8 +140,8 @@ async function resolveAlbumCoverFile(
   }
 
   const url = albumCover instanceof URL ? albumCover.toString() : albumCover;
-
   const res = await fetch(url);
+
   if (!res.ok) {
     throw new Error(`Failed to fetch album cover from URL: ${url}`);
   }
@@ -71,191 +152,7 @@ async function resolveAlbumCoverFile(
   return downscaleImage(fetched);
 }
 
-export async function splitAudioToTracks(
-  ffmpeg: FFmpeg,
-  sourceFile: File,
-  cueFile: File,
-  options?: SplitOptions,
-): Promise<SplitResult> {
-  const inputName = sanitizeFileName(sourceFile.name || "audio");
-  await ffmpeg.writeFile(inputName, await fetchFile(sourceFile));
-
-  let coverInputName: string | null = null;
-
-  if (options?.albumCover) {
-    const coverFile = await resolveAlbumCoverFile(options.albumCover);
-
-    if (coverFile) {
-      const originalName = coverFile.name || "cover.jpg";
-      const hasExt = /\.[a-zA-Z0-9]+$/.test(originalName);
-      const safeName = sanitizeFileName(
-        hasExt ? originalName : `${originalName}.jpg`,
-      );
-
-      coverInputName = safeName;
-      await ffmpeg.writeFile(coverInputName, await fetchFile(coverFile));
-    }
-  }
-
-  const audioDurationSeconds = await getAudioDurationSeconds(ffmpeg, inputName);
-
-  const { cueSheet, splitPlan } = await convertCueFileToTrackSheet(cueFile, {
-    totalDurationSeconds: audioDurationSeconds,
-  });
-
-  if (splitPlan.length === 0) {
-    throw new Error("CUE does not have a valid INDEX 01.");
-  }
-
-  const validation = validateCueAgainstDuration(
-    splitPlan,
-    audioDurationSeconds,
-    {
-      toleranceSeconds: 2,
-      minTrackSeconds: 1,
-    },
-  );
-
-  if (!validation.ok) {
-    throw new Error(
-      `Audio does not match CUE:\n${validation.errors.join("\n")}`,
-    );
-  }
-
-  const fullPlan = splitPlan;
-  const totalTracks = fullPlan.length;
-
-  const effectivePlan =
-    options?.selectedTracks && options.selectedTracks.length > 0
-      ? fullPlan.filter((t) => options.selectedTracks!.includes(t.track))
-      : fullPlan;
-
-  if (effectivePlan.length === 0) {
-    throw new Error(
-      `The selected track was not found in CUE. Valid number: ${fullPlan
-        .map((t) => t.track)
-        .join(", ")}`,
-    );
-  }
-
-  const zip = new JSZip();
-  const outputs: SplitResult["tracks"] = [];
-  const outputMime = "audio/flac";
-  const outputExt = "flac";
-
-  const album = cueSheet.album ?? "";
-  const albumArtist = cueSheet.performer ?? "";
-
-  for (const track of effectivePlan) {
-    const safeTitle = sanitizeFileName(track.title ?? `Track ${track.track}`);
-    const baseOutName = `${String(track.track).padStart(
-      2,
-      "0",
-    )} - ${safeTitle}`;
-    const outName = `${baseOutName}.${outputExt}`;
-    const tempName = `${baseOutName}.tmp.${outputExt}`;
-
-    const trackArtist =
-      (track as { performer?: string }).performer ?? albumArtist;
-
-    const metadataArgs = buildMetadataArgs({
-      album,
-      albumArtist,
-      trackArtist,
-      title: safeTitle,
-      trackNo: track.track,
-      totalTracks,
-    });
-
-    //
-    // PASS 1: split audio -> tempName
-    //
-    const splitArgs: string[] = [
-      "-i",
-      inputName,
-      "-ss",
-      track.startTime,
-      ...(track.durationTime ? ["-t", track.durationTime] : []),
-      "-map_metadata",
-      "-1",
-      "-vn",
-      "-c:a",
-      "flac",
-      "-compression_level",
-      "12",
-      ...metadataArgs,
-      tempName,
-    ];
-
-    console.log("[ffmpeg] split", splitArgs.join(" "));
-    await ffmpeg.exec(splitArgs);
-
-    //
-    // PASS 2: if there is a cover -> paste the cover into tempName -> outName
-    //         if there is no cover -> immediately rename logically (copy file)
-    //
-    if (coverInputName) {
-      const coverArgs: string[] = [
-        "-i",
-        tempName,
-        "-i",
-        coverInputName,
-        "-map_metadata",
-        "0",
-        "-map",
-        "0:a",
-        "-map",
-        "1:v",
-        "-c:a",
-        "copy",
-        "-c:v",
-        "copy",
-        "-disposition:v:0",
-        "attached_pic",
-        "-metadata:s:v",
-        "title=Album cover",
-        "-metadata:s:v",
-        "comment=Cover (front)",
-        outName,
-      ];
-
-      console.log("[ffmpeg] attach cover", coverArgs.join(" "));
-      await ffmpeg.exec(coverArgs);
-    } else {
-      // if there is no cover: tempName is final, just “rename” logically
-      // (in FS ffmpeg we can: read tempName -> write as outName)
-      const tempData = await ffmpeg.readFile(tempName);
-      await ffmpeg.writeFile(outName, tempData);
-    }
-
-    const fileData = await ffmpeg.readFile(outName);
-    if (!(fileData instanceof Uint8Array)) {
-      throw new Error(
-        `ffmpeg.readFile(${outName}) does not return a Uint8Array`,
-      );
-    }
-
-    const uint8 = Uint8Array.from(fileData);
-    const blob = new Blob([uint8], { type: outputMime });
-
-    zip.file(outName, uint8);
-
-    outputs.push({
-      name: outName,
-      blob,
-      plan: track,
-    });
-
-    // optional cleanup if your ffmpeg wrapper has deleteFile():
-    // await ffmpeg.deleteFile(tempName);
-    // (and later, if you want: delete coverInputName outside the loop after finishing)
-  }
-
-  const zipBlob = await zip.generateAsync({ type: "blob" });
-
-  return { zipBlob, tracks: outputs };
-}
-
+// ---- durasi total audio (detik) ----
 async function getAudioDurationSeconds(
   ffmpeg: FFmpeg,
   inputName: string,
@@ -284,31 +181,370 @@ async function getAudioDurationSeconds(
   return duration;
 }
 
-function buildMetadataArgs(opts: {
-  album: string;
-  albumArtist: string;
-  trackArtist: string;
-  title: string;
-  trackNo: number;
-  totalTracks: number;
-}): string[] {
-  const args: string[] = [];
+// ---- fungsi utama ----
+export async function splitAudioToTracks(
+  ffmpeg: FFmpeg,
+  sourceFile: File,
+  cueFile: File,
+  options?: SplitOptions,
+): Promise<SplitResult> {
+  const { onProgress, silentLog } = options ?? {};
 
-  if (opts.album) {
-    args.push("-metadata", `album=${opts.album}`);
-  }
-  if (opts.albumArtist) {
-    args.push("-metadata", `album_artist=${opts.albumArtist}`);
-  }
-  if (opts.trackArtist) {
-    args.push("-metadata", `artist=${opts.trackArtist}`);
-  }
-  args.push("-metadata", `title=${opts.title}`);
-  args.push("-metadata", `track=${opts.trackNo}/${opts.totalTracks}`);
+  // helper untuk emit progress di mana-mana
+  let totalToProcess = 0; // akan di-set setelah kita tahu effectivePlan
+  let timeStart = performance.now();
 
-  return args;
+  const emit = (partial: {
+    status: SplitProgressStatus;
+    phase?: SplitPhase;
+    step?: SplitStep;
+    track?: TrackSplitPlan;
+    done?: number;
+    etaSeconds?: number;
+  }) => {
+    if (!onProgress) return;
+    const done = partial.done ?? 0;
+    const eta = partial.etaSeconds ?? 0;
+
+    onProgress({
+      status: partial.status,
+      phase: partial.phase,
+      step: partial.step,
+      track: partial.track,
+      done,
+      total: totalToProcess,
+      etaSeconds: eta,
+    });
+  };
+
+  // ---- PHASE: init & prepare input ----
+  emit({
+    status: "processing",
+    phase: "prepareInput",
+    step: "writeInput",
+    done: 0,
+  });
+
+  const inputName = sanitizeFileName(sourceFile.name || "audio");
+  await ffmpeg.writeFile(inputName, await fetchFile(sourceFile));
+
+  // ---- PHASE: prepare cover (opsional) ----
+  let coverInputName: string | null = null;
+
+  if (options?.albumCover) {
+    emit({
+      status: "processing",
+      phase: "prepareCover",
+      step: "resolveCover",
+      done: 0,
+    });
+
+    const coverFile = await resolveAlbumCoverFile(options.albumCover);
+
+    if (coverFile) {
+      const originalName = coverFile.name || "cover.jpg";
+      const hasExt = /\.[a-zA-Z0-9]+$/.test(originalName);
+      const safeName = sanitizeFileName(
+        hasExt ? originalName : `${originalName}.jpg`,
+      );
+
+      coverInputName = safeName;
+
+      emit({
+        status: "processing",
+        phase: "prepareCover",
+        step: "writeCover",
+        done: 0,
+      });
+
+      await ffmpeg.writeFile(coverInputName, await fetchFile(coverFile));
+    }
+  }
+
+  // ---- PHASE: analyze audio ----
+  emit({
+    status: "processing",
+    phase: "analyzeAudio",
+    step: "probeDuration",
+    done: 0,
+  });
+
+  const audioDurationSeconds = await getAudioDurationSeconds(ffmpeg, inputName);
+
+  // ---- PHASE: build plan (parse + validate cue) ----
+  emit({
+    status: "processing",
+    phase: "buildPlan",
+    step: "convertCue",
+    done: 0,
+  });
+
+  const { cueSheet, splitPlan } = await convertCueFileToTrackSheet(cueFile, {
+    totalDurationSeconds: audioDurationSeconds,
+  });
+
+  if (splitPlan.length === 0) {
+    throw new Error("CUE does not have a valid INDEX 01.");
+  }
+
+  emit({
+    status: "processing",
+    phase: "buildPlan",
+    step: "validatePlan",
+    done: 0,
+  });
+
+  const validation = validateCueAgainstDuration(
+    splitPlan,
+    audioDurationSeconds,
+    {
+      toleranceSeconds: 2,
+      minTrackSeconds: 1,
+    },
+  );
+
+  if (!validation.ok) {
+    throw new Error(
+      `Audio does not match CUE:\n${validation.errors.join("\n")}`,
+    );
+  }
+
+  const fullPlan = splitPlan;
+  const totalTracksInAlbum = fullPlan.length;
+
+  const effectivePlan =
+    options?.selectedTracks && options.selectedTracks.length > 0
+      ? fullPlan.filter((t) => options.selectedTracks!.includes(t.track))
+      : fullPlan;
+
+  if (effectivePlan.length === 0) {
+    throw new Error(
+      `The selected track was not found in CUE. Valid number: ${fullPlan
+        .map((t) => t.track)
+        .join(", ")}`,
+    );
+  }
+
+  const zip = new JSZip();
+  const outputs: SplitResult["tracks"] = [];
+  const outputMime = "audio/flac";
+  const outputExt = "flac";
+
+  const album = cueSheet.album ?? "";
+  const albumArtist = cueSheet.performer ?? "";
+
+  totalToProcess = effectivePlan.length;
+  timeStart = performance.now(); // mulai hitung ETA dari sini
+
+  // ---- PHASE: processing (per track) ----
+  for (const [index, track] of effectivePlan.entries()) {
+    const doneBefore = index;
+
+    // hitung ETA sebelum mulai track ini
+    let etaBefore = 0;
+    if (doneBefore > 0) {
+      const elapsed = (performance.now() - timeStart) / 1000;
+      const avgPerTrack = elapsed / doneBefore;
+      const remaining = totalToProcess - doneBefore;
+      etaBefore = Math.max(0, Math.round(avgPerTrack * remaining));
+    }
+
+    // emit: track ini sedang diproses
+    emit({
+      status: "processing",
+      phase: "processing",
+      step: "trackSplit",
+      track,
+      done: doneBefore,
+      etaSeconds: etaBefore,
+    });
+
+    const safeTitle = sanitizeFileName(track.title ?? `Track ${track.track}`);
+    const baseOutName = `${String(track.track).padStart(
+      2,
+      "0",
+    )} - ${safeTitle}`;
+    const outName = `${baseOutName}.${outputExt}`;
+    const tempName = `${baseOutName}.tmp.${outputExt}`;
+
+    const trackArtist =
+      (track as { performer?: string }).performer ?? albumArtist;
+
+    const metadataArgs = buildMetadataArgs({
+      album,
+      albumArtist,
+      trackArtist,
+      title: safeTitle,
+      trackNo: track.track,
+      totalTracks: totalTracksInAlbum,
+    });
+
+    //
+    // PASS 1: split audio -> tempName (tanpa cover)
+    //
+    const splitArgs: string[] = [
+      "-i",
+      inputName,
+      "-ss",
+      track.startTime,
+      ...(track.durationTime ? ["-t", track.durationTime] : []),
+      "-map_metadata",
+      "-1",
+      "-vn",
+      "-c:a",
+      "flac",
+      "-compression_level",
+      "12",
+      ...metadataArgs,
+      tempName,
+    ];
+
+    if (!silentLog) console.log("[ffmpeg] split", splitArgs.join(" "));
+    await ffmpeg.exec(splitArgs);
+
+    //
+    // PASS 2: kalau ada cover -> tempel cover ke tempName -> outName
+    //
+    if (coverInputName) {
+      emit({
+        status: "processing",
+        phase: "processing",
+        step: "attachCover",
+        track,
+        done: doneBefore,
+        etaSeconds: etaBefore,
+      });
+
+      const coverArgs: string[] = [
+        "-i",
+        tempName,
+        "-i",
+        coverInputName,
+        "-map_metadata",
+        "0",
+        "-map",
+        "0:a",
+        "-map",
+        "1:v",
+        "-c:a",
+        "copy",
+        "-c:v",
+        "copy",
+        "-disposition:v:0",
+        "attached_pic",
+        "-metadata:s:v",
+        "title=Album cover",
+        "-metadata:s:v",
+        "comment=Cover (front)",
+        outName,
+      ];
+
+      if (!silentLog) console.log("[ffmpeg] attach cover", coverArgs.join(" "));
+      await ffmpeg.exec(coverArgs);
+    } else {
+      emit({
+        status: "processing",
+        phase: "processing",
+        step: "copyNoCover",
+        track,
+        done: doneBefore,
+        etaSeconds: etaBefore,
+      });
+
+      const tempData = await ffmpeg.readFile(tempName);
+      await ffmpeg.writeFile(outName, tempData);
+    }
+
+    emit({
+      status: "processing",
+      phase: "processing",
+      step: "readOutput",
+      track,
+      done: doneBefore,
+      etaSeconds: etaBefore,
+    });
+
+    const fileData = await ffmpeg.readFile(outName);
+    if (!(fileData instanceof Uint8Array)) {
+      throw new Error(
+        `ffmpeg.readFile(${outName}) does not return a Uint8Array`,
+      );
+    }
+
+    const uint8 = Uint8Array.from(fileData);
+    const blob = new Blob([uint8], { type: outputMime });
+
+    zip.file(outName, uint8);
+
+    outputs.push({
+      name: outName,
+      blob,
+      plan: track,
+    });
+
+    const doneNow = index + 1;
+
+    const elapsedNow = (performance.now() - timeStart) / 1000;
+    const avgNow = elapsedNow / doneNow;
+    const remainingNow = totalToProcess - doneNow;
+    const etaNow =
+      remainingNow > 0 ? Math.max(0, Math.round(avgNow * remainingNow)) : 0;
+
+    // emit: track ini sudah selesai
+    emit({
+      status: "processing",
+      phase: "processing",
+      step: "trackSplit",
+      track,
+      done: doneNow,
+      etaSeconds: etaNow,
+    });
+  }
+
+  // ---- PHASE: zipping ----
+  emit({
+    status: "zipping",
+    phase: "zipping",
+    step: "zipGenerate",
+    done: totalToProcess,
+    etaSeconds: 0,
+  });
+
+  const zipBlob = await zip.generateAsync({ type: "blob" });
+
+  // ---- PHASE: done ----
+  emit({
+    status: "done",
+    phase: "done",
+    step: "zipGenerate",
+    done: totalToProcess,
+    etaSeconds: 0,
+  });
+
+  return { zipBlob, tracks: outputs };
 }
 
-function sanitizeFileName(str: string): string {
-  return str.replace(/[<>:"/\\|?*]+/g, "_").trim();
-}
+export const PHASE_TEXT: Record<SplitPhase, string> = {
+  init: "Preparing…",
+  prepareInput: "Loading audio source…",
+  prepareCover: "Processing album cover…",
+  analyzeAudio: "Analyzing audio duration…",
+  buildPlan: "Generating split plan…",
+  processing: "Splitting tracks…",
+  zipping: "Creating ZIP archive…",
+  done: "Completed!",
+};
+
+export const STEP_TEXT: Record<SplitStep, string> = {
+  writeInput: "Importing audio file…",
+  resolveCover: "Fetching album cover…",
+  writeCover: "Saving optimized cover…",
+  probeDuration: "Reading track duration…",
+  convertCue: "Parsing cue sheet…",
+  validatePlan: "Validating cues against audio…",
+  trackSplit: "Splitting FLAC track…",
+  attachCover: "Embedding cover image…",
+  copyNoCover: "Writing final track file…",
+  readOutput: "Retrieving processed track…",
+  zipGenerate: "Building ZIP package…",
+};

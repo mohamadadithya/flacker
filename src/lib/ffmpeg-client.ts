@@ -7,12 +7,15 @@ const BASE_URL =
 let ffmpegInstance: FFmpeg | null = null;
 let loadPromise: Promise<void> | null = null;
 
-export function getFFmpegInstance() {
+export function getFFmpegInstance(silentLog = false) {
   if (!ffmpegInstance) {
     ffmpegInstance = new FFmpeg();
-    ffmpegInstance.on("log", ({ message }) => {
-      console.log("[ffmpeg]", message);
-    });
+
+    if (!silentLog) {
+      ffmpegInstance.on("log", ({ message }) => {
+        console.log("[ffmpeg]", message);
+      });
+    }
   }
   return ffmpegInstance;
 }
@@ -20,7 +23,7 @@ export function getFFmpegInstance() {
 export function loadFFmpeg(baseURL: string = BASE_URL) {
   if (loadPromise) return loadPromise;
 
-  const ffmpeg = getFFmpegInstance();
+  const ffmpeg = getFFmpegInstance(true);
 
   loadPromise = (async () => {
     await ffmpeg.load({
