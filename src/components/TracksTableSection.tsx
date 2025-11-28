@@ -61,6 +61,7 @@ export default function TracksTableSection() {
               src={coverSrc}
               alt={albumName}
               className="size-28 sm:size-32 aspect-square object-cover object-center"
+              crossOrigin="anonymous"
             />
             <div className="space-y-1.5">
               <h2 className="text-xl sm:text-2xl md:text-3xl font-bold">
@@ -123,8 +124,8 @@ export default function TracksTableSection() {
                 className="btn btn-primary"
               >
                 {selectedTracks.length > 0
-                  ? `Download Selected Tracks`
-                  : "Download All Tracks"}
+                  ? `Download Selected ${selectedTracks.length === 1 ? "Track" : "Tracks"}`
+                  : `Download ${trackSheet.length === 1 ? "Track" : "All Tracks"}`}
                 <ArrowRight className="size-5" />
               </button>
             </div>
