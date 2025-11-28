@@ -8,6 +8,8 @@ import type { AppFormData } from "../schema/app.schema";
 interface AlbumInfo extends Pick<CueSheet, "performer"> {
   name: string;
   coverSrc: string;
+  date: string;
+  genre: string;
 }
 
 const AppContext = createContext<{
@@ -25,7 +27,9 @@ const AppContext = createContext<{
   albumInfo: {
     name: "",
     performer: "",
+    date: "",
     coverSrc: "",
+    genre: "",
   },
   ffmpegHook: {
     ffmpeg: new FFmpeg(),

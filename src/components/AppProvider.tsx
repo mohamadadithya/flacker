@@ -18,6 +18,8 @@ export default function AppProvider({
   const [albumInfo, setAlbumInfo] = useState<AlbumInfo>({
     name: "",
     performer: "",
+    date: "",
+    genre: "",
     coverSrc: "",
   });
 

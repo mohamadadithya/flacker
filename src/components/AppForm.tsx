@@ -67,7 +67,6 @@ export function AppForm() {
         },
       );
 
-      // convert albumCover file to blob url
       const coverSrc =
         typeof albumCover === "string"
           ? albumCover
@@ -76,6 +75,8 @@ export function AppForm() {
       setAlbumInfo({
         name: cueSheet.album || "Unknown album",
         performer: cueSheet.performer || "Unknown performer",
+        date: cueSheet.date || "Unknown date",
+        genre: cueSheet.genre || "Unknown genre",
         coverSrc,
       });
 

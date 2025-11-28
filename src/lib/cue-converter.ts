@@ -1,18 +1,56 @@
 import type { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile } from "@ffmpeg/util";
 
-type CueTrack = {
-  track: number;
-  title?: string;
+type CueSheet = {
+  /** From `FILE "source.flac"` (optional, sometimes missing in user-made CUE) */
+  file?: string;
+
+  /** Album metadata — global TITLE before any TRACK appears */
+  album?: string;
+
+  /** Album-level performer (band, artist, etc.) */
   performer?: string;
-  index?: string;
+
+  /** REM DATE — year or YYYY-MM-DD parsed as string */
+  date?: string;
+
+  /** REM GENRE */
+  genre?: string;
+
+  /** REM CATALOG — useful for tagging FLAC metadata */
+  catalog?: string;
+
+  /** REM COMMENT — general notes */
+  comment?: string;
+
+  /** REM DISCNUMBER — 1 for disc 1/2/3… */
+  discNumber?: number;
+
+  /** REM DISCTOTAL if provided */
+  totalDiscs?: number;
+
+  /** Parsed track list */
+  tracks: CueTrack[];
 };
 
-type CueSheet = {
-  album?: string;
+type CueTrack = {
+  /** Track number (01, 02, 03…) */
+  track: number;
+
+  /** Track title: TITLE "xxxx" */
+  title?: string;
+
+  /** Track-level performer override — if absent, use album performer */
   performer?: string;
-  file?: string;
-  tracks: CueTrack[];
+
+  /** INDEX 01 time reference */
+  index?: string;
+
+  /** Optional: track-specific DATE (rare) */
+  date?: string;
+
+  /** Optional: track-level genre override (rare) */
+  genre?: string;
 };
 
 type TrackSheetRow = {
@@ -39,14 +77,53 @@ interface CueValidationResult {
   errors: string[];
 }
 
+function extractUnquotedAfter(
+  prefix: string,
+  line: string,
+): string | undefined {
+  const quoted = line.match(new RegExp(`${prefix}\\s+"([^"]+)"`, "i"));
+  if (quoted) return quoted[1];
+
+  return line
+    .replace(new RegExp(`${prefix}\\s+`, "i"), "")
+    .replace(/"/g, "")
+    .trim();
+}
+
 function parseCueText(text: string): CueSheet {
   const lines = text.split(/\r?\n/).map((l) => l.trim());
   const sheet: CueSheet = { tracks: [] };
-
   let currentTrack: CueTrack | null = null;
 
   for (const line of lines) {
-    if (!line || line.startsWith("REM")) continue;
+    if (!line || line.startsWith("REM COMMENT")) continue;
+
+    if (line.startsWith("REM DATE")) {
+      sheet.date = extractUnquotedAfter("REM DATE", line);
+      continue;
+    }
+    if (line.startsWith("REM GENRE")) {
+      sheet.genre = extractUnquotedAfter("REM GENRE", line);
+      continue;
+    }
+    if (line.startsWith("REM CATALOG")) {
+      sheet.catalog = extractUnquotedAfter("REM CATALOG", line);
+      continue;
+    }
+    if (line.startsWith("REM COMMENT")) {
+      sheet.comment = extractUnquotedAfter("REM COMMENT", line);
+      continue;
+    }
+    if (line.startsWith("REM DISCNUMBER")) {
+      const val = extractUnquotedAfter("REM DISCNUMBER", line);
+      sheet.discNumber = val ? Number(val) : undefined;
+      continue;
+    }
+    if (line.startsWith("REM DISCTOTAL")) {
+      const val = extractUnquotedAfter("REM DISCTOTAL", line);
+      sheet.totalDiscs = val ? Number(val) : undefined;
+      continue;
+    }
 
     if (line.startsWith("FILE")) {
       sheet.file = extractQuoted(line);
@@ -63,21 +140,15 @@ function parseCueText(text: string): CueSheet {
 
     if (line.startsWith("TITLE")) {
       const value = extractQuoted(line);
-      if (!currentTrack) {
-        sheet.album = value ?? sheet.album;
-      } else {
-        currentTrack.title = value ?? currentTrack.title;
-      }
+      if (!currentTrack) sheet.album = value ?? sheet.album;
+      else currentTrack.title = value ?? currentTrack.title;
       continue;
     }
 
     if (line.startsWith("PERFORMER")) {
       const value = extractQuoted(line);
-      if (!currentTrack) {
-        sheet.performer = value ?? sheet.performer;
-      } else {
-        currentTrack.performer = value ?? currentTrack.performer;
-      }
+      if (!currentTrack) sheet.performer = value ?? sheet.performer;
+      else currentTrack.performer = value ?? currentTrack.performer;
       continue;
     }
 

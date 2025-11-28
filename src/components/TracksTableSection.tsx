@@ -17,7 +17,13 @@ export default function TracksTableSection() {
     trackSheet,
     setTrackSheet,
     tracksTableRef,
-    albumInfo: { name: albumName, performer, coverSrc },
+    albumInfo: {
+      name: albumName,
+      performer,
+      coverSrc,
+      date: releaseDate,
+      genre,
+    },
     ffmpegHook,
     appFormHook,
   } = useAppContext();
@@ -103,7 +109,7 @@ export default function TracksTableSection() {
         <div className="w-full max-w-4xl mx-auto">
           <div className="mb-5 flex items-center gap-3">
             <img
-              src={coverSrc}
+              src={coverSrc || "/album-placeholder.png"}
               alt={albumName}
               className="size-28 sm:size-32 aspect-square object-cover object-center"
               crossOrigin="anonymous"
@@ -115,6 +121,11 @@ export default function TracksTableSection() {
               <p className="text-sm sm:text-base">
                 by <span className="text-primary">{performer}</span>
               </p>
+              {(releaseDate || genre) && (
+                <p className="text-xs sm:text-sm text-gray-300">
+                  {releaseDate} {genre !== "" && `• ${genre}`}
+                </p>
+              )}
             </div>
           </div>
           <div className="overflow-x-auto">
