@@ -15,12 +15,29 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const isAndroid = /Android/i.test(navigator.userAgent);
+
 function downloadBlob(blob: Blob, filename: string) {
+  if (!blob || blob.size === 0) {
+    console.error("blob is empty or invalid", blob);
+    throw new Error("FLAC File is not valid!");
+  }
+
   const url = URL.createObjectURL(blob);
+
+  if (isAndroid) {
+    window.open(url, "_blank");
+
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 30_000);
+    return;
+  }
+
   const a = document.createElement("a");
 
   a.href = url;
-  a.download = filename;
+  a.download = filename || "output.flac";
   a.style.display = "none";
   document.body.appendChild(a);
 
@@ -29,9 +46,8 @@ function downloadBlob(blob: Blob, filename: string) {
   const timeout = setTimeout(() => {
     URL.revokeObjectURL(url);
     a.remove();
-  }, 30_000); // 30s
+  }, 30_000);
 
-  // Return cleanup function (optional to call)
   return () => {
     clearTimeout(timeout);
     URL.revokeObjectURL(url);
