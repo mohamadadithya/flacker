@@ -74,7 +74,7 @@ export default function TracksTableSection() {
           step,
           currentTrackTitle:
             phase === "processing" && track
-              ? (track.title ?? `Track ${track.track}`)
+              ? `${String(track.track).padStart(2, "0")} - ${track.title ?? `Track ${track.track}`}`
               : prev.currentTrackTitle,
           done,
           total,
