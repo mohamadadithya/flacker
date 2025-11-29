@@ -218,6 +218,7 @@ export function AppForm() {
                 <p className="text-sm sm:text-base">Album Cover</p>
               </div>
               <button
+                disabled={generalDisabledState}
                 onClick={() => setValue("albumCover", undefined)}
                 type="button"
                 className="btn btn-error btn-sm"
