@@ -218,7 +218,12 @@ async function getAudioDurationFromFile(
 
   ffmpeg.on("log", handler);
 
-  await ffmpeg.exec(["-i", virtualName, "-f", "null", "-"]);
+  try {
+    await ffmpeg.exec(["-i", virtualName, "-f", "null", "-"]);
+  } finally {
+    ffmpeg.off("log", handler);
+    await ffmpeg.deleteFile(virtualName).catch(() => {});
+  }
 
   if (duration == null) {
     throw new Error("Unable to read audio duration from ffmpeg.");
