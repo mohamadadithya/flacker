@@ -109,6 +109,12 @@ export function AppForm() {
     compute: (value) => !!value,
   });
 
+  const isAlbumCoverExist = useWatch({
+    control,
+    name: "albumCover",
+    compute: (value) => !!value,
+  });
+
   const albumCover = useWatch({
     control,
     name: "albumCover",
@@ -162,6 +168,8 @@ export function AppForm() {
                         resetField("cueFile");
                         if (cueInputRef.current) cueInputRef.current.value = "";
                       }
+
+                      if (isAlbumCoverExist) resetField("albumCover");
                     }}
                     onBlur={onBlur}
                   />
