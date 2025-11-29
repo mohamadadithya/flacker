@@ -26,6 +26,11 @@ export default function AppProvider({
   const ffmpegHook = useFFmpeg();
   const appFormHook = useForm<AppFormData>({
     resolver: zodResolver(appFormSchema),
+    defaultValues: {
+      audioFile: undefined,
+      cueFile: undefined,
+      albumCover: undefined,
+    },
   });
 
   return (

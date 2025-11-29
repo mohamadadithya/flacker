@@ -35,6 +35,7 @@ export function AppForm() {
     formState: { errors },
     control,
     setValue,
+    resetField,
   } = appFormHook!;
 
   const { isLoaded, ffmpeg } = ffmpegHook;
@@ -129,6 +130,7 @@ export function AppForm() {
 
   const generalDisabledState = !isLoaded || isProcessingCue;
   const coverFileInputRef = useRef<HTMLInputElement>(null);
+  const cueInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
     <div className="bg-base-300 p-6 md:p-8 rounded-xl shadow mt-6 relative overflow-hidden">
@@ -142,7 +144,9 @@ export function AppForm() {
             <Controller
               name="audioFile"
               control={control}
-              render={({ field: { ref, onChange, name, onBlur } }) => {
+              render={({ field }) => {
+                const { ref, onChange, onBlur, name } = field;
+
                 return (
                   <FileInput
                     disabled={generalDisabledState}
@@ -151,12 +155,19 @@ export function AppForm() {
                     name={name}
                     isError={!!errors.audioFile}
                     mimeTypes={AUDIO_MIME_TYPES}
-                    onChange={(event) => fileSetter(event, onChange)}
+                    onChange={(event) => {
+                      fileSetter(event, onChange);
+
+                      if (isCueFileExist) {
+                        resetField("cueFile");
+                        if (cueInputRef.current) cueInputRef.current.value = "";
+                      }
+                    }}
                     onBlur={onBlur}
                   />
                 );
               }}
-            ></Controller>
+            />
             {errors.audioFile && (
               <p className="text-error mt-2.5">{errors.audioFile?.message}</p>
             )}
@@ -166,11 +177,14 @@ export function AppForm() {
             <Controller
               name="cueFile"
               control={control}
-              render={({ field: { ref, onChange, name, onBlur } }) => {
+              render={({ field: { ref: rhfRef, onChange, name, onBlur } }) => {
                 return (
                   <FileInput
                     disabled={!isAudioFileExist || generalDisabledState}
-                    ref={ref}
+                    ref={(el) => {
+                      rhfRef(el);
+                      cueInputRef.current = el;
+                    }}
                     id="cue"
                     name={name}
                     isError={!!errors.cueFile}
