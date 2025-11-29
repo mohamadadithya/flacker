@@ -1,31 +1,41 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { toBlobURL } from "@ffmpeg/util";
 
-const BASE_URL =
+const DEFAULT_BASE_URL =
   "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/esm";
 
 let ffmpegInstance: FFmpeg | null = null;
-let loadPromise: Promise<void> | null = null;
+let loadPromise: Promise<FFmpeg> | null = null;
 
-export function getFFmpegInstance(silentLog = false) {
-  if (!ffmpegInstance) {
-    ffmpegInstance = new FFmpeg();
+type FFmpegOptions = {
+  baseURL?: string;
+  silentLog?: boolean;
+};
 
-    if (!silentLog) {
-      ffmpegInstance.on("log", ({ message }) => {
-        console.log("[ffmpeg]", message);
-      });
-    }
-  }
-  return ffmpegInstance;
-}
+/**
+ * Always async — returns FFmpeg instance that is ready to use.
+ * - Loads only once
+ * - Safe for concurrent calls
+ */
+export async function getFFmpegInstance(
+  options: FFmpegOptions = {},
+): Promise<FFmpeg> {
+  const { baseURL = DEFAULT_BASE_URL, silentLog = false } = options;
 
-export function loadFFmpeg(baseURL: string = BASE_URL) {
+  // Already loaded → return instantly
+  if (ffmpegInstance) return ffmpegInstance;
+
+  // Load is ongoing → wait for it
   if (loadPromise) return loadPromise;
 
-  const ffmpeg = getFFmpegInstance(true);
-
+  // First time → prepare loading workflow
   loadPromise = (async () => {
+    const ffmpeg = new FFmpeg();
+
+    if (!silentLog) {
+      ffmpeg.on("log", ({ message }) => console.log("[ffmpeg]", message));
+    }
+
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
       wasmURL: await toBlobURL(
@@ -37,6 +47,9 @@ export function loadFFmpeg(baseURL: string = BASE_URL) {
         "text/javascript",
       ),
     });
+
+    ffmpegInstance = ffmpeg;
+    return ffmpeg;
   })();
 
   return loadPromise;

@@ -73,7 +73,7 @@ export default function TracksTableSection() {
   });
 
   async function handleDownload() {
-    if (!appFormHook) return;
+    if (!appFormHook || !ffmpeg) return;
 
     const { getValues: getAppFormValues } = appFormHook;
     const { audioFile, cueFile, albumCover } = getAppFormValues();
