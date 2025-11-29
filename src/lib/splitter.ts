@@ -280,7 +280,7 @@ export async function splitAudioToTracks(
     done: 0,
   });
 
-  const audioDurationSeconds = await getAudioDurationSeconds(ffmpeg, inputName);
+  const albumDuration = await getAudioDurationSeconds(ffmpeg, inputName);
 
   emit({
     status: "processing",
@@ -289,9 +289,10 @@ export async function splitAudioToTracks(
     done: 0,
   });
 
-  const { cueSheet, splitPlan } = await convertCueFileToTrackSheet(cueFile, {
-    totalDurationSeconds: audioDurationSeconds,
-  });
+  const { cueSheet, splitPlan } = await convertCueFileToTrackSheet(
+    cueFile,
+    albumDuration,
+  );
 
   if (splitPlan.length === 0) {
     throw new Error("CUE does not have a valid INDEX 01.");
@@ -304,14 +305,10 @@ export async function splitAudioToTracks(
     done: 0,
   });
 
-  const validation = validateCueAgainstDuration(
-    splitPlan,
-    audioDurationSeconds,
-    {
-      toleranceSeconds: 2,
-      minTrackSeconds: 1,
-    },
-  );
+  const validation = validateCueAgainstDuration(splitPlan, albumDuration, {
+    toleranceSeconds: 2,
+    minTrackSeconds: 1,
+  });
 
   if (!validation.ok) {
     throw new Error(

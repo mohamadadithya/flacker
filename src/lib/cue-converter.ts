@@ -1,5 +1,4 @@
-import type { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile } from "@ffmpeg/util";
+import mediaInfoFactory from "mediainfo.js";
 
 type CueSheet = {
   /** From `FILE "source.flac"` (optional, sometimes missing in user-made CUE) */
@@ -197,39 +196,40 @@ function formatCueTime(seconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}:${String(frames).padStart(2, "0")}`;
 }
 
-async function getAudioDurationFromFile(
-  ffmpeg: FFmpeg,
-  file: File,
-  virtualName: string,
-): Promise<number> {
-  await ffmpeg.writeFile(virtualName, await fetchFile(file));
+async function createMediaInfo() {
+  const mediaInfo = await mediaInfoFactory({
+    locateFile: (path) => `/mediainfo/${path}`,
+  });
 
-  let duration: number | null = null;
+  return mediaInfo;
+}
 
-  const handler = (e: { type: string; message: string }) => {
-    const match = e.message.match(/Duration:\s+(\d+):(\d+):(\d+\.\d+)/);
-    if (match) {
-      const h = Number(match[1]);
-      const m = Number(match[2]);
-      const s = Number(match[3]);
-      duration = h * 3600 + m * 60 + s;
-    }
-  };
+async function getAudioDurationFromFile(file: File): Promise<number> {
+  const mediaInfo = await createMediaInfo();
+  const fileSize = file.size;
 
-  ffmpeg.on("log", handler);
+  const result = await mediaInfo.analyzeData(
+    fileSize,
+    async (chunkSize, offset) => {
+      const buffer = await file.slice(offset, offset + chunkSize).arrayBuffer();
+      return new Uint8Array(buffer);
+    },
+  );
 
-  try {
-    await ffmpeg.exec(["-i", virtualName, "-f", "null", "-"]);
-  } finally {
-    ffmpeg.off("log", handler);
-    await ffmpeg.deleteFile(virtualName).catch(() => {});
+  mediaInfo.close();
+
+  const tracks = result.media?.track ?? [];
+  const audio =
+    tracks.find((t) => t["@type"] === "Audio") ||
+    tracks.find((t) => t["@type"] === "General");
+
+  const duration = Number(audio?.Duration);
+
+  if (!Number.isFinite(duration)) {
+    throw new Error("Unable to retrieve duration from MediaInfo.");
   }
 
-  if (duration == null) {
-    throw new Error("Unable to read audio duration from ffmpeg.");
-  }
-
-  return duration;
+  return duration; // in seconds;
 }
 
 function buildTrackSheet(
@@ -261,7 +261,7 @@ function buildTrackSheet(
 
 function buildSplitPlan(
   sheet: CueSheet,
-  totalDurationSeconds?: number,
+  albumDuration?: number,
 ): TrackSplitPlan[] {
   const tracksWithIndex = sheet.tracks.filter((t) => t.index);
 
@@ -272,8 +272,7 @@ function buildSplitPlan(
   return tracksWithIndex.map((track, idx) => {
     const start = starts[idx];
     const nextStart = idx < starts.length - 1 ? starts[idx + 1] : undefined;
-    const end =
-      nextStart !== undefined ? nextStart : (totalDurationSeconds ?? null);
+    const end = nextStart !== undefined ? nextStart : (albumDuration ?? null);
 
     const durationSeconds =
       end !== null && end !== undefined ? Math.max(0, end - start) : null;
@@ -293,17 +292,14 @@ function buildSplitPlan(
 
 async function convertCueFileToTrackSheet(
   cueFile: File,
-  options?: { totalDurationSeconds?: number },
+  albumDuration: number,
 ) {
   const content = await readCueFileSmart(cueFile);
 
   const cueSheet = parseCueText(content);
-  const trackSheet = buildTrackSheet(
-    cueSheet,
-    options?.totalDurationSeconds || 0,
-  );
+  const trackSheet = buildTrackSheet(cueSheet, albumDuration);
 
-  const splitPlan = buildSplitPlan(cueSheet, options?.totalDurationSeconds);
+  const splitPlan = buildSplitPlan(cueSheet, albumDuration);
 
   return { cueSheet, trackSheet, splitPlan };
 }

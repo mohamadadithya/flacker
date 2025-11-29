@@ -15,7 +15,6 @@ import {
 } from "../lib/cue-converter";
 import { useAppContext } from "../contexts/app.context";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import Spinner from "./Spinner";
 import FolderOpen from "~icons/mdi/folder-open";
 import Trash from "~icons/mdi/trash-outline";
@@ -38,7 +37,7 @@ export function AppForm() {
     resetField,
   } = appFormHook!;
 
-  const { isLoaded, ffmpeg } = ffmpegHook;
+  const { isLoaded } = ffmpegHook;
   const [isProcessingCue, setIsProcessingCue] = useState(false);
 
   async function convertFileToBlobUrl(file: File | undefined) {
@@ -52,43 +51,29 @@ export function AppForm() {
   async function onSubmit(data: AppFormData) {
     const { cueFile, audioFile, albumCover } = data;
 
-    const promise = async () => {
-      setIsProcessingCue(true);
+    setIsProcessingCue(true);
 
-      const albumDuration = await getAudioDurationFromFile(
-        ffmpeg,
-        audioFile,
-        audioFile.name,
-      );
+    const albumDuration = await getAudioDurationFromFile(audioFile);
+    const { trackSheet, cueSheet } = await convertCueFileToTrackSheet(
+      cueFile,
+      albumDuration,
+    );
 
-      const { trackSheet, cueSheet } = await convertCueFileToTrackSheet(
-        cueFile,
-        {
-          totalDurationSeconds: albumDuration,
-        },
-      );
+    const coverSrc =
+      typeof albumCover === "string"
+        ? albumCover
+        : await convertFileToBlobUrl(albumCover);
 
-      const coverSrc =
-        typeof albumCover === "string"
-          ? albumCover
-          : await convertFileToBlobUrl(albumCover);
-
-      setAlbumInfo({
-        name: cueSheet.album || "Unknown album",
-        performer: cueSheet.performer || "Unknown performer",
-        date: cueSheet.date || "Unknown date",
-        genre: cueSheet.genre || "Unknown genre",
-        coverSrc,
-      });
-
-      setTrackSheet(trackSheet);
-      setIsProcessingCue(false);
-    };
-
-    toast.promise(promise, {
-      loading: "Please wait, checking a cue...",
-      error: "Error",
+    setAlbumInfo({
+      name: cueSheet.album || "Unknown album",
+      performer: cueSheet.performer || "Unknown performer",
+      date: cueSheet.date || "Unknown date",
+      genre: cueSheet.genre || "Unknown genre",
+      coverSrc,
     });
+
+    setTrackSheet(trackSheet);
+    setIsProcessingCue(false);
   }
 
   useEffect(() => {

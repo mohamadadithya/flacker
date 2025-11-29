@@ -1,4 +1,3 @@
-import { Toaster } from "sonner";
 import { AppForm } from "./components/AppForm";
 import Footer from "./components/Footer";
 import Container from "./components/Container";
@@ -10,7 +9,6 @@ function App() {
 
   return (
     <>
-      <Toaster position="top-right" richColors />
       <section className="grid place-items-center min-h-dvh relative">
         <Container>
           <div className="w-full max-w-md mx-auto">
