@@ -263,6 +263,7 @@ export default function TracksTableSection() {
                     <tr key={no}>
                       <th>
                         <Checkbox
+                          className="checked:checkbox-primary"
                           checked={isChecked}
                           onChange={handleSelectTrack}
                           value={no}
@@ -342,12 +343,15 @@ export default function TracksTableSection() {
   );
 }
 
-function Checkbox({ ...rest }: React.InputHTMLAttributes<HTMLInputElement>) {
+function Checkbox({
+  className = "",
+  ...rest
+}: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <label>
       <input
         type="checkbox"
-        className="checkbox checkbox-xs sm:checkbox-sm md:checkbox-md"
+        className={`checkbox checkbox-xs sm:checkbox-sm md:checkbox-md ${className}`}
         {...rest}
       />
     </label>
