@@ -402,7 +402,7 @@ export async function splitAudioToTracks(
       "-c:a",
       "flac",
       "-compression_level",
-      "12",
+      "5",
       ...metadataArgs,
       tempName,
     ];
