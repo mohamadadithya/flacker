@@ -4,14 +4,11 @@ import Container from "./Container";
 import ArrowRight from "~icons/mdi/arrow-right";
 import { useEffect, useRef, useState } from "react";
 import {
-  PHASE_TEXT,
   splitAudioToTracks,
-  STEP_TEXT,
   type SplitProgress,
   type SplitUIState,
 } from "../lib/splitter";
 import { downloadBlob } from "../helpers";
-import { TextShimmer } from "./TextShimmer";
 import AutosizeInput from "react-input-autosize";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,6 +16,7 @@ import {
   albumInfoSchema,
   type AlbumInfoFormData,
 } from "../schema/album-info.schema";
+import ProcessModal from "./ProcessModal";
 
 export default function TracksTableSection() {
   const {
@@ -127,6 +125,15 @@ export default function TracksTableSection() {
       processModalRef.current?.close();
     }
   });
+
+  function handleCancel() {
+    document.documentElement.scrollTo({ top: 0, behavior: "smooth" });
+
+    const timeout = setTimeout(() => setTrackSheet([]), 1000);
+    return () => {
+      clearTimeout(timeout);
+    };
+  }
 
   return (
     <section
@@ -285,11 +292,7 @@ export default function TracksTableSection() {
               <p>{trackSheet.length} tracks</p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setTrackSheet([])}
-                type="button"
-                className="btn"
-              >
+              <button onClick={handleCancel} type="button" className="btn">
                 Cancel
               </button>
               <button
@@ -306,39 +309,7 @@ export default function TracksTableSection() {
           </div>
         </div>
       </Container>
-      <dialog ref={processModalRef} className="modal">
-        <div className="modal-box space-y-2 text-sm">
-          <TextShimmer className="font-semibold text-lg">
-            {PHASE_TEXT[splitState.phase!]}
-          </TextShimmer>
-
-          {splitState.phase !== "processing" ? (
-            <p>{splitState.step ? STEP_TEXT[splitState.step] : ""}</p>
-          ) : null}
-
-          {splitState.phase === "processing" &&
-            splitState.currentTrackTitle && (
-              <div className="flex items-center justify-between gap-4">
-                <p>
-                  Splitting Track: <b>{splitState.currentTrackTitle}</b>
-                </p>
-                <p>
-                  {splitState.done}/{splitState.total}
-                </p>
-              </div>
-            )}
-
-          {splitState.phase === "processing" ? (
-            <progress
-              className="progress w-full progress-primary"
-              value={splitState.done}
-              max={splitState.total}
-            ></progress>
-          ) : (
-            <progress className="progress w-full"></progress>
-          )}
-        </div>
-      </dialog>
+      <ProcessModal ref={processModalRef} splitState={splitState} />
     </section>
   );
 }
