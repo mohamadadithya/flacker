@@ -4,7 +4,7 @@ import { getFFmpegInstance } from "../lib/ffmpeg-client";
 
 export function useFFmpeg() {
   const [ffmpeg, setFfmpeg] = useState<FFmpeg | null>();
-  const [isLoaded, setIsLoaded] = useState(true);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
