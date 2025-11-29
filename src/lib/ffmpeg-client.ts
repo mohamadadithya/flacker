@@ -13,6 +13,46 @@ type FFmpegOptions = {
 };
 
 /**
+ * Checks if the 'ffmpeg-core.wasm' file is stored within a specified cache.
+ * @param {string} cacheName The name of the cache to check (default: 'ffmpeg-core').
+ * @returns {Promise<boolean>} True if the wasm file is found, false otherwise.
+ */
+export async function isFFmpegWasmCached(
+  cacheName = "ffmpeg-core",
+  options: Partial<{ silentLog: boolean }> = {
+    silentLog: false,
+  },
+) {
+  if (!("caches" in window)) {
+    console.error("Cache API is not supported in this browser.");
+    return false;
+  }
+
+  try {
+    const cache = await caches.open(cacheName);
+    const requests = await cache.keys();
+    const wasmFound = requests.some((request) =>
+      request.url.includes("ffmpeg-core.wasm"),
+    );
+
+    if (!options.silentLog) {
+      if (wasmFound) {
+        console.log(`✅ ffmpeg-core.wasm found in cache '${cacheName}'.`);
+        // Optional: Log all cached URLs if needed for debugging
+        // console.log('Cached URLs:', requests.map(req => req.url).sort());
+      } else {
+        console.log(`⚠️ ffmpeg-core.wasm not found in cache '${cacheName}'.`);
+      }
+    }
+
+    return wasmFound;
+  } catch (error) {
+    console.error(`Error accessing cache '${cacheName}':`, error);
+    return false;
+  }
+}
+
+/**
  * Always async — returns FFmpeg instance that is ready to use.
  * - Loads only once
  * - Safe for concurrent calls

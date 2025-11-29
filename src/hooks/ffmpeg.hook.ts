@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import type { FFmpeg } from "@ffmpeg/ffmpeg";
-import { getFFmpegInstance } from "../lib/ffmpeg-client";
+import { getFFmpegInstance, isFFmpegWasmCached } from "../lib/ffmpeg-client";
 
 export function useFFmpeg() {
   const [ffmpeg, setFfmpeg] = useState<FFmpeg | null>();
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -12,6 +12,12 @@ export function useFFmpeg() {
 
     (async () => {
       try {
+        const isCached = await isFFmpegWasmCached("ffmpeg-cache-v1", {
+          silentLog: true,
+        });
+
+        if (!isCached) setIsLoaded(false);
+
         const instance = await getFFmpegInstance({ silentLog: true });
 
         if (cancelled) return;
