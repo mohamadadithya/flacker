@@ -12,6 +12,13 @@ import {
 } from "../lib/splitter";
 import { downloadBlob } from "../helpers";
 import { TextShimmer } from "./TextShimmer";
+import AutosizeInput from "react-input-autosize";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  albumInfoSchema,
+  type AlbumInfoFormData,
+} from "../schema/album-info.schema";
 
 export default function TracksTableSection() {
   const {
@@ -52,15 +59,27 @@ export default function TracksTableSection() {
   });
 
   const processModalRef = useRef<HTMLDialogElement | null>(null);
+  const {
+    control,
+    formState: { errors },
+    getValues: getAlbumFormValues,
+  } = useForm<AlbumInfoFormData>({
+    resolver: zodResolver(albumInfoSchema),
+    defaultValues: {
+      albumName: albumName || "",
+      performer: performer || "",
+      releaseDate: releaseDate || "",
+      genre: genre || "",
+    },
+    mode: "onChange",
+  });
 
   async function handleDownload() {
     if (!appFormHook) return;
 
-    const { getValues } = appFormHook;
-
-    const audioFile = getValues("audioFile");
-    const cueFile = getValues("cueFile");
-    const albumCover = getValues("albumCover");
+    const { getValues: getAppFormValues } = appFormHook;
+    const { audioFile, cueFile, albumCover } = getAppFormValues();
+    const albumInfoValues = getAlbumFormValues();
 
     const result = await splitAudioToTracks(ffmpeg, audioFile, cueFile, {
       albumCover,
@@ -88,6 +107,7 @@ export default function TracksTableSection() {
           etaSeconds: status === "processing" ? etaSeconds : null,
         }));
       },
+      albumInfo: { ...albumInfoValues },
     });
 
     if ("file" in result && result.file && result.fileName) {
@@ -123,16 +143,105 @@ export default function TracksTableSection() {
               crossOrigin="anonymous"
             />
             <div className="space-y-1.5">
-              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold">
-                {albumName}
-              </h2>
-              <p className="text-sm sm:text-base">
-                by <span className="text-primary">{performer}</span>
-              </p>
+              <Controller
+                name="albumName"
+                control={control}
+                render={({
+                  field: { ref, name, value, onChange, onBlur },
+                  fieldState,
+                }) => (
+                  <>
+                    <AutosizeInput
+                      type="text"
+                      value={value ?? ""}
+                      onChange={onChange}
+                      onBlur={onBlur}
+                      name={name}
+                      inputRef={ref}
+                      inputClassName={`text-xl sm:text-2xl md:text-3xl font-bold`}
+                    />
+                    {fieldState.error && (
+                      <p className="text-error">{fieldState.error.message}</p>
+                    )}
+                  </>
+                )}
+              />
+              <div className="text-sm sm:text-base">
+                by{" "}
+                <Controller
+                  name="performer"
+                  control={control}
+                  render={({
+                    field: { ref, name, value, onChange, onBlur },
+                    fieldState,
+                  }) => (
+                    <>
+                      <AutosizeInput
+                        type="text"
+                        value={value ?? ""}
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        name={name}
+                        inputRef={ref}
+                        inputClassName="text-primary"
+                      />
+                      {fieldState.error && (
+                        <p className="text-error mt-2.5">
+                          {fieldState.error.message}
+                        </p>
+                      )}
+                    </>
+                  )}
+                />
+              </div>
               {(releaseDate || genre) && (
-                <p className="text-xs sm:text-sm text-gray-300">
-                  {releaseDate} {genre !== "" && `• ${genre}`}
+                <div className="text-xs sm:text-sm text-gray-300">
+                  <Controller
+                    name="releaseDate"
+                    control={control}
+                    render={({
+                      field: { ref, name, value, onChange, onBlur },
+                    }) => (
+                      <AutosizeInput
+                        type="text"
+                        value={value ?? ""}
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        name={name}
+                        inputRef={ref}
+                      />
+                    )}
+                  />{" "}
+                  {genre !== "" && (
+                    <>
+                      •{" "}
+                      <Controller
+                        name="genre"
+                        control={control}
+                        render={({
+                          field: { ref, name, value, onChange, onBlur },
+                        }) => (
+                          <AutosizeInput
+                            type="text"
+                            value={value ?? ""}
+                            onChange={onChange}
+                            onBlur={onBlur}
+                            name={name}
+                            inputRef={ref}
+                          />
+                        )}
+                      />
+                    </>
+                  )}
+                </div>
+              )}
+              {errors.releaseDate && (
+                <p className="text-error mt-2.5">
+                  {errors.releaseDate?.message}
                 </p>
+              )}
+              {errors.genre && (
+                <p className="text-error mt-2.5">{errors.genre?.message}</p>
               )}
             </div>
           </div>

@@ -6,6 +6,7 @@ import {
   validateCueAgainstDuration,
   type TrackSplitPlan,
 } from "./cue-converter";
+import type { AlbumInfoFormData } from "../schema/album-info.schema";
 
 export interface SplitResult {
   zipBlob?: Blob;
@@ -59,6 +60,7 @@ export type SplitOptions = {
   selectedTracks?: number[];
   onProgress?: (event: SplitProgress) => void;
   silentLog?: boolean;
+  albumInfo?: AlbumInfoFormData;
 };
 
 export type SplitUIState = {
@@ -82,17 +84,29 @@ function buildMetadataArgs(opts: {
   title: string;
   trackNo: number;
   totalTracks: number;
+  releaseDate: string;
+  genre: string;
 }): string[] {
   const args: string[] = [];
 
   if (opts.album) {
     args.push("-metadata", `album=${opts.album}`);
   }
+
   if (opts.albumArtist) {
     args.push("-metadata", `album_artist=${opts.albumArtist}`);
   }
+
   if (opts.trackArtist) {
     args.push("-metadata", `artist=${opts.trackArtist}`);
+  }
+
+  if (opts.releaseDate) {
+    args.push("-metadata", `date=${opts.releaseDate}`);
+  }
+
+  if (opts.genre) {
+    args.push("-metadata", `genre=${opts.genre}`);
   }
 
   args.push("-metadata", `title=${opts.title}`);
@@ -189,7 +203,7 @@ export async function splitAudioToTracks(
   cueFile: File,
   options?: SplitOptions,
 ): Promise<SplitResult> {
-  const { onProgress, silentLog } = options ?? {};
+  const { onProgress, silentLog, albumInfo } = options ?? {};
 
   let totalToProcess = 0;
   let timeStart = performance.now();
@@ -326,8 +340,10 @@ export async function splitAudioToTracks(
   const outputMime = "audio/flac";
   const outputExt = "flac";
 
-  const album = cueSheet.album ?? "";
-  const albumArtist = cueSheet.performer ?? "";
+  const album = albumInfo?.albumName || cueSheet.album || "";
+  const albumArtist = albumInfo?.performer || cueSheet.performer || "";
+  const releaseDate = albumInfo?.releaseDate || cueSheet.date || "";
+  const genre = albumInfo?.genre || cueSheet.genre || "";
 
   totalToProcess = effectivePlan.length;
   timeStart = performance.now();
@@ -370,6 +386,8 @@ export async function splitAudioToTracks(
       title: normalizedTitle,
       trackNo: track.track,
       totalTracks: totalTracksInAlbum,
+      releaseDate,
+      genre,
     });
 
     const splitArgs: string[] = [
