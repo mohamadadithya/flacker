@@ -1,4 +1,4 @@
-import React, { createContext, useContext, type RefObject } from "react";
+import { createContext, createRef, useContext, type RefObject } from "react";
 import { type CueSheet, type TrackSheetRow } from "../lib/cue-converter";
 import type { useFFmpeg } from "../hooks/ffmpeg.hook";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
@@ -20,10 +20,11 @@ const AppContext = createContext<{
   setAlbumInfo: (newAlbumInfo: AlbumInfo) => void;
   ffmpegHook: ReturnType<typeof useFFmpeg>;
   appFormHook: UseFormReturn<AppFormData> | undefined;
+  appFormRef: RefObject<HTMLFormElement | null>;
 }>({
   trackSheet: [],
   setTrackSheet: () => {},
-  tracksTableRef: React.createRef<HTMLDivElement>(),
+  tracksTableRef: createRef<HTMLDivElement>(),
   albumInfo: {
     name: "",
     performer: "",
@@ -38,6 +39,7 @@ const AppContext = createContext<{
   },
   setAlbumInfo: () => {},
   appFormHook: undefined,
+  appFormRef: createRef<HTMLFormElement | null>(),
 });
 
 function useAppContext() {

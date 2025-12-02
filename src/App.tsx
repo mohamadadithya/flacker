@@ -3,6 +3,7 @@ import Footer from "./components/Footer";
 import Container from "./components/Container";
 import { useAppContext } from "./contexts/app.context";
 import TracksTableSection from "./components/TracksTableSection";
+import FileDropper from "./components/FileDropper";
 
 function App() {
   const { trackSheet } = useAppContext();
@@ -24,6 +25,7 @@ function App() {
         <Footer />
       </section>
       {trackSheet.length > 0 && <TracksTableSection />}
+      <FileDropper />
     </>
   );
 }

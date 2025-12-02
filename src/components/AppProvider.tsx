@@ -33,6 +33,8 @@ export default function AppProvider({
     },
   });
 
+  const appFormRef = useRef<HTMLFormElement | null>(null);
+
   return (
     <AppContext.Provider
       value={{
@@ -43,6 +45,7 @@ export default function AppProvider({
         setAlbumInfo,
         ffmpegHook,
         appFormHook,
+        appFormRef,
       }}
     >
       {children}
