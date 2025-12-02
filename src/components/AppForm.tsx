@@ -32,7 +32,7 @@ export function AppForm() {
 
   const {
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isValid },
     control,
     getValues,
     resetField,
@@ -296,6 +296,15 @@ export function AppForm() {
                               onChange={(event) => {
                                 const file = event.target.files?.[0];
                                 onChange(file ?? undefined);
+
+                                if (isValid) {
+                                  appFormRef.current?.dispatchEvent(
+                                    new Event("submit", {
+                                      cancelable: true,
+                                      bubbles: true,
+                                    }),
+                                  );
+                                }
                               }}
                               onBlur={onBlur}
                             />
